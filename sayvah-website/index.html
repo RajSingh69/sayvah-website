@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="SayVah is a community seva platform helping people request practical support and local sevadaars offer help safely." />
+  <meta name="theme-color" content="#071321" />
+  <title>SayVah | Community Seva, Made Simple</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="#top" aria-label="SayVah home">
+        <span class="brand-mark">ੴ</span>
+        <span class="brand-copy"><strong>SayVah</strong><small>Seva made simple</small></span>
+      </a>
+
+      <button class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="main-nav">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav id="main-nav" class="main-nav" aria-label="Primary navigation">
+        <a href="#what">What is SayVah?</a>
+        <a href="#how">How it works</a>
+        <a href="#safety">Safety</a>
+        <a href="#features">App features</a>
+        <a href="#guides">Help guides</a>
+        <a href="#faq">FAQs</a>
+        <a class="nav-button" href="#download">Get the app</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-glow hero-glow-one"></div>
+      <div class="hero-glow hero-glow-two"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <span class="eyebrow"><span class="eyebrow-dot"></span> Community support, powered by seva</span>
+          <h1>Need a hand?<br><span>SayVah connects you to people who want to help.</span></h1>
+          <p class="hero-lead">SayVah is a community app that makes it simple to request practical help or volunteer your time locally. No jargon, no complicated process — just a clear route from “I need help” to “someone can help.”</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#need-help">I need help</a>
+            <a class="button button-secondary" href="#volunteer">I want to volunteer</a>
+          </div>
+          <div class="hero-trust">
+            <span>✓ Free to use</span>
+            <span>✓ Local community support</span>
+            <span>✓ Safety controls built in</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="SayVah app preview">
+          <div class="phone phone-primary">
+            <img src="assets/home-overview.jpg" alt="SayVah app home screen showing personal seva dashboard and safety information" />
+          </div>
+          <div class="phone phone-secondary">
+            <img src="assets/requests.jpg" alt="SayVah app requests screen showing create request, my requests, browse requests and helping" />
+          </div>
+          <div class="floating-badge floating-badge-one"><strong>Community first</strong><span>Built around local seva</span></div>
+          <div class="floating-badge floating-badge-two"><strong>Simple by design</strong><span>Clear steps for new users</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-wrap" aria-label="SayVah overview">
+      <div class="container stats-card">
+        <div><span class="stat-icon cyan">◎</span><strong>22</strong><small>Community members</small></div>
+        <div><span class="stat-icon saffron">✦</span><strong>4</strong><small>Active helpers</small></div>
+        <div><span class="stat-icon cyan">✓</span><strong>3</strong><small>Completed seva</small></div>
+        <div><span class="stat-icon saffron">⌖</span><strong>Local</strong><small>Growing area by area</small></div>
+      </div>
+      <p class="stats-note">Current figures shown from the live app screenshots you provided. Update these when you want the website connected to Firebase.</p>
+    </section>
+
+    <section class="section" id="what">
+      <div class="container">
+        <div class="section-heading centered">
+          <span class="section-kicker">Start here</span>
+          <h2>What actually is SayVah?</h2>
+          <p>Think of this as the no-confusion guide. If you have never heard of seva, sevadaars or the app before, this is everything you need to know.</p>
+        </div>
+
+        <div class="intro-grid">
+          <article class="feature-card feature-card-large cyan-card">
+            <span class="feature-icon">🤝</span>
+            <h3>SayVah connects people who need help with people willing to help.</h3>
+            <p>Someone can create a practical support request. A suitable local volunteer can then offer to help. The app keeps the request, communication and progress together in one place.</p>
+          </article>
+          <article class="feature-card saffron-card">
+            <span class="feature-icon">🪯</span>
+            <h3>What does “seva” mean?</h3>
+            <p>Seva means selfless service — giving your time, effort or skills to help someone else without expecting something in return.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">🫶</span>
+            <h3>What is a sevadaar?</h3>
+            <p>A sevadaar is simply a volunteer doing seva. On SayVah, these are the people offering practical support through the platform.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon">🌍</span>
+            <h3>Who can use it?</h3>
+            <p>SayVah is inspired by Sikh values, but the aim is practical community support. You do not need to already understand Sikh terminology to use the platform.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-panel" id="how">
+      <div class="container">
+        <div class="section-heading split-heading">
+          <div><span class="section-kicker">How it works</span><h2>Two simple paths.</h2></div>
+          <p>Choose whether you need support or want to volunteer. The process is deliberately straightforward.</p>
+        </div>
+
+        <div class="path-switch" role="tablist" aria-label="How SayVah works">
+          <button class="path-button active" data-tab="need-help" aria-selected="true">I need help</button>
+          <button class="path-button" data-tab="volunteer" aria-selected="false">I want to volunteer</button>
+        </div>
+
+        <div class="path-panel active" id="need-help">
+          <div class="step-list">
+            <article><span>01</span><div><h3>Create your account</h3><p>Download SayVah, sign up and add your basic profile details.</p></div></article>
+            <article><span>02</span><div><h3>Create a request</h3><p>Say what support you need, the general area, and when you need it.</p></div></article>
+            <article><span>03</span><div><h3>Wait for offers</h3><p>Suitable sevadaars can browse the request and offer to help.</p></div></article>
+            <article><span>04</span><div><h3>Review before connecting</h3><p>Check available profile information and follow the approval process before meeting anyone.</p></div></article>
+            <article><span>05</span><div><h3>Use chat to confirm details</h3><p>Keep the key information clear and organised inside SayVah.</p></div></article>
+            <article><span>06</span><div><h3>Complete the request</h3><p>Once the help has been provided, the request can be closed as completed.</p></div></article>
+          </div>
+        </div>
+
+        <div class="path-panel" id="volunteer" hidden>
+          <div class="step-list">
+            <article><span>01</span><div><h3>Make your profile useful</h3><p>Add a clear photo, your area and enough information for requesters to understand who you are.</p></div></article>
+            <article><span>02</span><div><h3>Browse requests</h3><p>Open the Requests area and view support opportunities that suit you.</p></div></article>
+            <article><span>03</span><div><h3>Offer to help</h3><p>Choose a request you genuinely have the time and ability to support.</p></div></article>
+            <article><span>04</span><div><h3>Wait for approval</h3><p>Do not turn up or make assumptions. Follow the app's connection and approval process.</p></div></article>
+            <article><span>05</span><div><h3>Confirm arrangements</h3><p>Use in-app chat to agree the relevant time, place and task details.</p></div></article>
+            <article><span>06</span><div><h3>Complete your seva</h3><p>Help respectfully and update the request when the support is finished.</p></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-heading centered">
+          <span class="section-kicker">Inside the app</span>
+          <h2>Designed to feel clear, not complicated.</h2>
+          <p>The website uses the same visual language as the app: dark navy surfaces, cyan guidance, saffron safety accents and simple cards.</p>
+        </div>
+
+        <div class="app-showcase">
+          <article class="showcase-copy">
+            <span class="mini-kicker">Home</span>
+            <h3>Your seva space at a glance.</h3>
+            <p>The home screen shows your requests, people you are helping, progress, local community information, safety notices, active areas and access to beginner guidance.</p>
+            <ul class="check-list"><li>Personal activity snapshot</li><li>Community pulse</li><li>Safety gate and request status</li><li>Meet your sevadaars</li><li>Current service areas</li></ul>
+          </article>
+          <div class="showcase-images">
+            <img class="screenshot-card screenshot-tall" src="assets/home-stats.jpg" alt="SayVah home screen community pulse and personal statistics" loading="lazy" />
+            <img class="screenshot-card screenshot-tall offset" src="assets/home-community.jpg" alt="SayVah home screen showing safety legal notice, impact, sevadaars and areas" loading="lazy" />
+          </div>
+        </div>
+
+        <div class="feature-mini-grid">
+          <article class="dark-card"><span class="icon-box cyan-box">＋</span><h3>Create requests</h3><p>Post a practical support request for the community.</p></article>
+          <article class="dark-card"><span class="icon-box saffron-box">⌕</span><h3>Browse requests</h3><p>See suitable live requests and offer your support.</p></article>
+          <article class="dark-card"><span class="icon-box cyan-box">▣</span><h3>Track your activity</h3><p>Manage your own requests and the requests you are helping with.</p></article>
+          <article class="dark-card"><span class="icon-box saffron-box">✦</span><h3>Explore what is coming</h3><p>Gurdwara pages, maps, travel support and future community tools.</p></article>
+        </div>
+
+        <div class="screenshot-strip" aria-label="SayVah screenshots">
+          <img src="assets/home-overview.jpg" alt="SayVah home screen" loading="lazy" />
+          <img src="assets/requests.jpg" alt="SayVah requests screen" loading="lazy" />
+          <img src="assets/explore.jpg" alt="SayVah explore screen" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <section class="section safety-section" id="safety">
+      <div class="container">
+        <div class="safety-hero">
+          <div>
+            <span class="section-kicker saffron-text">Safety centre</span>
+            <h2>Helping people is good. Doing it safely matters.</h2>
+            <p>SayVah includes safety controls and clear expectations around how users connect. The platform is designed to support sensible, respectful community interaction — not blind trust.</p>
+          </div>
+          <div class="shield-mark">🛡️</div>
+        </div>
+
+        <div class="safety-grid">
+          <article><span>01</span><h3>Admin approval</h3><p>Where the workflow requires it, connections can be subject to admin approval before users proceed.</p></article>
+          <article><span>02</span><h3>Visible profiles</h3><p>Users can review the available profile information before accepting or offering support.</p></article>
+          <article><span>03</span><h3>Report users</h3><p>Inappropriate behaviour can be reported through the platform for review.</p></article>
+          <article><span>04</span><h3>Block users</h3><p>Users can block accounts where continued contact is unwanted or inappropriate.</p></article>
+          <article><span>05</span><h3>In-app communication</h3><p>Keeping request communication together makes arrangements easier to understand and review.</p></article>
+          <article><span>06</span><h3>Organisation involvement</h3><p>Gurdwara and organisation affiliations can provide an additional layer of community context and administration.</p></article>
+        </div>
+
+        <div class="notice-card"><span class="notice-icon">⚠</span><div><strong>SayVah is not an emergency service.</strong><p>If someone is in immediate danger or requires urgent professional help, contact the appropriate emergency service. Never share passwords, banking credentials or unnecessary sensitive information through a request.</p></div></div>
+      </div>
+    </section>
+
+    <section class="section section-panel" id="sevadaars">
+      <div class="container">
+        <div class="section-heading split-heading">
+          <div><span class="section-kicker">The people</span><h2>Meet your sevadaars.</h2></div>
+          <p>The website can later pull approved public sevadaar profiles directly from Firebase. For now, this section explains what visitors should expect to see.</p>
+        </div>
+
+        <div class="people-grid">
+          <article class="person-card"><div class="person-avatar">R</div><div><h3>Local sevadaar</h3><p>Camberley area</p></div><span class="person-status">Available</span><div class="person-tags"><span>Technology</span><span>Transport</span></div></article>
+          <article class="person-card"><div class="person-avatar saffron-avatar">S</div><div><h3>Community helper</h3><p>Frimley area</p></div><span class="person-status">Active</span><div class="person-tags"><span>Shopping</span><span>Events</span></div></article>
+          <article class="person-card"><div class="person-avatar">G</div><div><h3>Gurdwara sevadaar</h3><p>Local area</p></div><span class="person-status">Approved</span><div class="person-tags"><span>General support</span><span>Community</span></div></article>
+        </div>
+        <p class="privacy-copy">Only profiles specifically approved for public display should appear here. Private contact details, exact addresses and private request information should remain inside the app.</p>
+      </div>
+    </section>
+
+    <section class="section" id="areas">
+      <div class="container area-grid">
+        <div>
+          <span class="section-kicker">Current areas</span>
+          <h2>Starting local, growing carefully.</h2>
+          <p class="section-intro">SayVah is being introduced area by area so the community and volunteer network can grow responsibly.</p>
+          <div class="area-pills"><span>Camberley</span><span>Frimley</span><span>West End</span><span>Bisley</span><span>Woking</span></div>
+        </div>
+        <div class="area-visual">
+          <div class="area-ring ring-one"></div><div class="area-ring ring-two"></div><div class="area-ring ring-three"></div>
+          <div class="area-center">SayVah<small>Local network</small></div>
+          <span class="area-pin pin-a">Camberley</span><span class="area-pin pin-b">Frimley</span><span class="area-pin pin-c">West End</span><span class="area-pin pin-d">Bisley</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section guide-section" id="guides">
+      <div class="container">
+        <div class="section-heading centered"><span class="section-kicker">Help centre</span><h2>Need to know how to do something?</h2><p>These guides mirror the simple card-based style used inside the app.</p></div>
+        <div class="guide-grid">
+          <button class="guide-card" data-guide="account"><span class="guide-icon cyan-box">👤</span><div><h3>Create your account</h3><p>Set up your profile properly.</p></div><span class="arrow">›</span></button>
+          <button class="guide-card" data-guide="request"><span class="guide-icon saffron-box">＋</span><div><h3>Create a request</h3><p>Ask the community for practical help.</p></div><span class="arrow">›</span></button>
+          <button class="guide-card" data-guide="offer"><span class="guide-icon cyan-box">🤝</span><div><h3>Offer to help</h3><p>Respond to a request as a sevadaar.</p></div><span class="arrow">›</span></button>
+          <button class="guide-card" data-guide="chat"><span class="guide-icon saffron-box">💬</span><div><h3>Use chat safely</h3><p>Confirm arrangements clearly.</p></div><span class="arrow">›</span></button>
+          <button class="guide-card" data-guide="report"><span class="guide-icon cyan-box">🛡️</span><div><h3>Report or block</h3><p>What to do if something is not right.</p></div><span class="arrow">›</span></button>
+          <button class="guide-card" data-guide="delete"><span class="guide-icon saffron-box">⌫</span><div><h3>Delete your account</h3><p>Permanently remove your account.</p></div><span class="arrow">›</span></button>
+        </div>
+
+        <div class="guide-detail" id="guide-detail" aria-live="polite">
+          <span class="mini-kicker">Quick guide</span><h3 id="guide-title">Create your account</h3><ol id="guide-steps"></ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-panel" id="faq">
+      <div class="container faq-grid">
+        <div class="section-heading"><span class="section-kicker">FAQ board</span><h2>Questions people are likely to ask.</h2><p>This can later become a live public view of approved Community Q&amp;A content from the app.</p></div>
+        <div class="accordion">
+          <article><button aria-expanded="false"><span>Do I need to be Sikh to use SayVah?</span><span>＋</span></button><div><p>No. SayVah is inspired by the Sikh principle of seva, but the website and app are designed to explain the process clearly to anyone who is new to it.</p></div></article>
+          <article><button aria-expanded="false"><span>What sort of help can I request?</span><span>＋</span></button><div><p>Suitable everyday practical support, such as shopping collection, simple technology help, community event support, local transport or another reasonable task that fits the platform.</p></div></article>
+          <article><button aria-expanded="false"><span>Can I choose who helps me?</span><span>＋</span></button><div><p>You can review the profile information available to you and follow the app's request and approval process before connecting.</p></div></article>
+          <article><button aria-expanded="false"><span>What if something feels wrong?</span><span>＋</span></button><div><p>Do not continue the interaction. Use the reporting or blocking tools where appropriate and contact the SayVah team. If there is immediate danger, contact the emergency services.</p></div></article>
+          <article><button aria-expanded="false"><span>Is SayVah an emergency service?</span><span>＋</span></button><div><p>No. SayVah is for community support and should not be used instead of emergency, medical, safeguarding or other professional services.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section download-section" id="download">
+      <div class="container download-card">
+        <div><span class="section-kicker saffron-text">Ready to use SayVah?</span><h2>Take the community with you.</h2><p>Download the app to request support, volunteer locally, follow live requests and access the full SayVah experience.</p></div>
+        <div class="download-actions"><a class="store-button" href="#"><small>Download on the</small><strong>App Store</strong></a><a class="store-button" href="#"><small>Get it on</small><strong>Google Play</strong></a></div>
+      </div>
+    </section>
+
+    <section class="section" id="contact">
+      <div class="container contact-grid">
+        <div><span class="section-kicker">Need more help?</span><h2>Contact the SayVah team.</h2><p class="section-intro">Use this for app support, volunteer questions, organisation enquiries or general guidance.</p><div class="contact-note"><strong>For safety concerns</strong><p>Include enough information for the team to understand the issue, but avoid putting unnecessary sensitive personal information in an email.</p></div></div>
+        <form class="contact-form" id="contact-form">
+          <label for="name">Your name</label><input id="name" name="name" type="text" required autocomplete="name" />
+          <label for="email">Email address</label><input id="email" name="email" type="email" required autocomplete="email" />
+          <label for="topic">What is this about?</label><select id="topic" name="topic"><option>General support</option><option>Safety concern</option><option>Volunteer enquiry</option><option>Organisation enquiry</option><option>Technical issue</option></select>
+          <label for="message">Message</label><textarea id="message" name="message" rows="5" required></textarea>
+          <button class="button button-primary" type="submit">Send message</button>
+          <p class="form-note">This starter version opens the visitor's email app. Update the support email in <code>script.js</code>.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div><a class="brand" href="#top"><span class="brand-mark">ੴ</span><span class="brand-copy"><strong>SayVah</strong><small>Seva made simple</small></span></a><p>Helping communities support one another through seva.</p></div>
+      <div><h3>Explore</h3><a href="#what">What is SayVah?</a><a href="#how">How it works</a><a href="#safety">Safety</a><a href="#guides">Help guides</a></div>
+      <div><h3>Important</h3><a href="#">Privacy policy</a><a href="#">Terms of use</a><a href="#contact">Contact</a></div>
+    </div>
+    <div class="container footer-bottom"><span>© <span id="year"></span> SayVah. All rights reserved.</span><span>Community first. Seva always.</span></div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
