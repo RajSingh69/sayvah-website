@@ -226,17 +226,19 @@
     </section>
 
     <section class="section" id="areas">
-      <div class="container area-grid">
-        <div>
-          <span class="section-kicker">Current areas</span>
-          <h2>Starting local, growing carefully.</h2>
-          <p class="section-intro">SayVah is being introduced area by area so the community and volunteer network can grow responsibly.</p>
-          <div class="area-pills"><span>Camberley</span><span>Frimley</span><span>West End</span><span>Bisley</span><span>Woking</span></div>
+      <div class="container">
+        <div class="section-heading split-heading">
+          <div>
+            <span class="section-kicker">Current areas</span>
+            <h2>Starting local, growing carefully.</h2>
+          </div>
+          <p>SayVah is being introduced area by area so the community and volunteer network can grow responsibly. Active areas below are loaded directly from the SayVah platform.</p>
         </div>
-        <div class="area-visual">
-          <div class="area-ring ring-one"></div><div class="area-ring ring-two"></div><div class="area-ring ring-three"></div>
-          <div class="area-center">SayVah<small>Local network</small></div>
-          <span class="area-pin pin-a">Camberley</span><span class="area-pin pin-b">Frimley</span><span class="area-pin pin-c">West End</span><span class="area-pin pin-d">Bisley</span>
+
+        <div id="live-locations" class="live-locations" aria-live="polite">
+          <div class="live-location-empty">
+            Loading active SayVah areas...
+          </div>
         </div>
       </div>
     </section>
@@ -304,5 +306,6 @@
   </footer>
 
   <script src="script.js"></script>
+  <script type="module" src="firebase.js"></script>
 </body>
 </html>
