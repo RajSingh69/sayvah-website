@@ -1,5 +1,46 @@
 const SUPPORT_EMAIL = 'support@sayvah.co.uk';
 
+const LAUNCH_DATE = new Date('2026-08-31T23:00:00.000Z'); // 1 September 2026 at 00:00 UK time (BST).
+const countdown = document.getElementById('launch-countdown');
+const countdownParts = {
+  days: document.querySelector('[data-countdown="days"]'),
+  hours: document.querySelector('[data-countdown="hours"]'),
+  minutes: document.querySelector('[data-countdown="minutes"]'),
+  seconds: document.querySelector('[data-countdown="seconds"]')
+};
+
+function updateCountdown() {
+  if (!countdown) return;
+  const remaining = LAUNCH_DATE.getTime() - Date.now();
+  if (remaining <= 0) {
+    countdown.innerHTML = '<div class="countdown-live">SayVah is now live.</div>';
+    return;
+  }
+
+  const totalSeconds = Math.floor(remaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (countdownParts.days) countdownParts.days.textContent = String(days);
+  if (countdownParts.hours) countdownParts.hours.textContent = String(hours).padStart(2, '0');
+  if (countdownParts.minutes) countdownParts.minutes.textContent = String(minutes).padStart(2, '0');
+  if (countdownParts.seconds) countdownParts.seconds.textContent = String(seconds).padStart(2, '0');
+}
+
+updateCountdown();
+setInterval(updateCountdown, 1000);
+
+document.querySelectorAll('.volunteer-jump').forEach(link => {
+  link.addEventListener('click', () => {
+    const interest = link.dataset.interest;
+    const interestField = document.getElementById('launch-interest');
+    if (interestField && interest) interestField.value = interest;
+  });
+});
+
+
 const menuToggle = document.querySelector('.menu-toggle');
 const mainNav = document.querySelector('.main-nav');
 menuToggle?.addEventListener('click', () => {

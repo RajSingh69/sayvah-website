@@ -3,9 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="SayVah is a community seva platform helping people request practical support and local sevadaars offer help safely." />
+  <meta name="description" content="SayVah is a community support and seva app connecting people who need practical help with local volunteers. Official community launch: 1 September 2026." />
   <meta name="theme-color" content="#071321" />
-  <title>SayVah | Community Seva, Made Simple</title>
+  <link rel="canonical" href="https://sayvah.co.uk/" />
+  <meta property="og:title" content="SayVah | Community Support Through Seva" />
+  <meta property="og:description" content="Join the first SayVah community ahead of the official launch on 1 September 2026. Request practical help, volunteer locally, and support seva in your area." />
+  <meta property="og:url" content="https://sayvah.co.uk/" />
+  <meta property="og:type" content="website" />
+  <title>SayVah | Community Support Through Seva</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -28,8 +33,9 @@
       <nav id="main-nav" class="main-nav" aria-label="Primary navigation">
         <a href="#what">What is SayVah?</a>
         <a href="#how">How it works</a>
+        <a href="#launch">Launch</a>
+        <a href="#join">Join</a>
         <a href="#safety">Safety</a>
-        <a href="#features">App features</a>
         <a href="#guides">Help guides</a>
         <a href="#faq">FAQs</a>
         <a class="nav-button" href="#download">Get the app</a>
@@ -43,12 +49,12 @@
       <div class="hero-glow hero-glow-two"></div>
       <div class="container hero-grid">
         <div class="hero-copy">
-          <span class="eyebrow"><span class="eyebrow-dot"></span> Community support, powered by seva</span>
-          <h1>Need a hand?<br><span>SayVah connects you to people who want to help.</span></h1>
-          <p class="hero-lead">SayVah is a community app that makes it simple to request practical help or volunteer your time locally. No jargon, no complicated process — just a clear route from “I need help” to “someone can help.”</p>
+          <span class="eyebrow"><span class="eyebrow-dot"></span> Official community launch: 1 September 2026</span>
+          <h1>Need a hand?<br><span>SayVah connects you to local people who want to help.</span></h1>
+          <p class="hero-lead">SayVah is already available on iOS and Android. Ahead of the official community launch, we are building the first local network of people requesting practical help, volunteers offering time, and organisations supporting selfless seva.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#need-help">I need help</a>
-            <a class="button button-secondary" href="#volunteer">I want to volunteer</a>
+            <a class="button button-primary" href="#join">Join early</a>
+            <a class="button button-secondary volunteer-jump" href="#join" data-interest="Volunteer / Sevadaar">I want to volunteer</a>
           </div>
           <div class="hero-trust">
             <span>✓ Free to use</span>
@@ -70,6 +76,26 @@
       </div>
     </section>
 
+    <section class="launch-band" id="launch" aria-labelledby="launch-title">
+      <div class="container launch-card">
+        <div class="launch-copy">
+          <span class="section-kicker saffron-text">Pre-launch</span>
+          <h2 id="launch-title">Official community launch - 1 September 2026</h2>
+          <p>SayVah is already available on iOS and Android. We're currently building the first local community of users, volunteers and organisations ahead of the official launch.</p>
+          <div class="launch-actions">
+            <a class="button button-primary" href="#join">Join the Launch</a>
+            <a class="button button-secondary" href="#download">Download the App</a>
+          </div>
+        </div>
+        <div class="countdown" id="launch-countdown" aria-live="polite">
+          <div class="countdown-card"><strong data-countdown="days">0</strong><span>Days</span></div>
+          <div class="countdown-card"><strong data-countdown="hours">0</strong><span>Hours</span></div>
+          <div class="countdown-card"><strong data-countdown="minutes">0</strong><span>Minutes</span></div>
+          <div class="countdown-card"><strong data-countdown="seconds">0</strong><span>Seconds</span></div>
+        </div>
+      </div>
+    </section>
+
     <section class="stats-wrap" aria-label="SayVah overview">
       <div class="container stats-card">
         <div><span class="stat-icon cyan">◎</span><strong>22</strong><small>Community members</small></div>
@@ -77,7 +103,7 @@
         <div><span class="stat-icon cyan">✓</span><strong>3</strong><small>Completed seva</small></div>
         <div><span class="stat-icon saffron">⌖</span><strong>Local</strong><small>Growing area by area</small></div>
       </div>
-      <p class="stats-note">Current figures shown from the live app screenshots you provided. Update these when you want the website connected to Firebase.</p>
+      <p class="stats-note">Early community figures will grow as SayVah moves through launch area by area.</p>
     </section>
 
     <section class="section" id="what">
@@ -146,6 +172,36 @@
             <article><span>06</span><div><h3>Complete your seva</h3><p>Help respectfully and update the request when the support is finished.</p></div></article>
           </div>
         </div>
+      </div>
+    </section>
+
+
+
+    <section class="section join-section" id="join">
+      <div class="container join-grid">
+        <div class="join-copy">
+          <span class="section-kicker">Join the launch</span>
+          <h2>Join the first SayVah community</h2>
+          <p>We're starting small and growing area by area. Join the launch list if you want to volunteer, use SayVah for support, represent a Gurdwara or organisation, or simply follow the project.</p>
+          <div class="join-note"><strong>Launch list</strong><span>We'll only contact you about SayVah launch updates and relevant community opportunities.</span></div>
+        </div>
+        <form class="launch-form" id="launch-form" novalidate>
+          <div class="form-field"><label for="launch-name">Full name</label><input id="launch-name" name="name" type="text" autocomplete="name" required /></div>
+          <div class="form-field"><label for="launch-email">Email address</label><input id="launch-email" name="email" type="email" autocomplete="email" required /></div>
+          <div class="form-field"><label for="launch-area">Area / town</label><input id="launch-area" name="area" type="text" autocomplete="address-level2" required /></div>
+          <div class="form-field"><label for="launch-interest">How would you like to be involved?</label><select id="launch-interest" name="interest" required><option value="">Choose one</option><option>Volunteer / Sevadaar</option><option>I may use SayVah for support</option><option>Gurdwara / Organisation</option><option>Keep me updated</option></select></div>
+          <div class="form-field"><label for="launch-message">Optional message</label><textarea id="launch-message" name="message" rows="4"></textarea></div>
+          <label class="consent-row" for="launch-consent"><input id="launch-consent" name="consent" type="checkbox" required /><span>I'm happy for SayVah to contact me about the launch and relevant community opportunities.</span></label>
+          <button class="button button-primary" type="submit" id="launch-submit">Join the Launch</button>
+          <p class="form-status" id="launch-form-status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="section volunteer-section" id="volunteer">
+      <div class="container volunteer-card">
+        <div><span class="section-kicker saffron-text">Founding volunteers</span><h2>Become a founding SayVah sevadaar</h2><p>Help us build the first trusted local volunteer network before launch. Choose when you're available and only take on seva that suits you.</p></div>
+        <a class="button button-primary volunteer-jump" href="#join" data-interest="Volunteer / Sevadaar">Join as a Volunteer</a>
       </div>
     </section>
 
@@ -229,7 +285,7 @@
       <div class="container">
         <div class="section-heading split-heading">
           <div>
-            <span class="section-kicker">Current areas</span>
+            <span class="section-kicker">Live from SayVah</span>
             <h2>Starting local, growing carefully.</h2>
           </div>
           <p>SayVah is being introduced area by area so the community and volunteer network can grow responsibly. Active areas below are loaded directly from the SayVah platform.</p>
@@ -276,8 +332,13 @@
 
     <section class="section download-section" id="download">
       <div class="container download-card">
-        <div><span class="section-kicker saffron-text">Ready to use SayVah?</span><h2>Take the community with you.</h2><p>Download the app to request support, volunteer locally, follow live requests and access the full SayVah experience.</p></div>
-        <div class="download-actions"><a class="store-button" href="#"><small>Download on the</small><strong>App Store</strong></a><a class="store-button" href="#"><small>Get it on</small><strong>Google Play</strong></a></div>
+        <div><span class="section-kicker saffron-text">Available on iOS and Android</span><h2>Take the community with you.</h2><p>Download the app now, join the launch list, and be ready for the official community launch on 1 September 2026.</p></div>
+        <div class="download-actions">
+          <!-- TODO: Replace # with the real SayVah App Store URL. -->
+          <a class="store-button" href="#"><small>Download on the</small><strong>App Store</strong></a>
+          <!-- TODO: Replace # with the real SayVah Google Play URL. -->
+          <a class="store-button" href="#"><small>Get it on</small><strong>Google Play</strong></a>
+        </div>
       </div>
     </section>
 

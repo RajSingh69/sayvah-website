@@ -4,7 +4,9 @@ import {
   collection,
   query,
   where,
-  onSnapshot
+  onSnapshot,
+  addDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -21,6 +23,79 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const locationsList = document.getElementById("live-locations");
+
+const launchForm = document.getElementById("launch-form");
+const launchSubmit = document.getElementById("launch-submit");
+const launchStatus = document.getElementById("launch-form-status");
+let launchSubmitting = false;
+
+// Firestore rules should allow public create only on launchSignups.
+// Public reads, updates and deletes must remain blocked, and existing protected collections must not be weakened.
+if (launchForm) {
+  launchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (launchSubmitting) return;
+
+    const formData = new FormData(launchForm);
+    const signup = {
+      name: String(formData.get("name") || "").trim(),
+      email: String(formData.get("email") || "").trim(),
+      area: String(formData.get("area") || "").trim(),
+      interest: String(formData.get("interest") || "").trim(),
+      message: String(formData.get("message") || "").trim(),
+      consent: formData.get("consent") === "on"
+    };
+
+    if (!signup.name || !signup.email || !signup.area || !signup.interest || !signup.consent) {
+      setLaunchStatus("Please complete the required fields and consent checkbox.", "error");
+      return;
+    }
+
+    if (!launchForm.reportValidity()) return;
+
+    launchSubmitting = true;
+    launchForm.classList.add("is-submitting");
+    if (launchSubmit) {
+      launchSubmit.disabled = true;
+      launchSubmit.textContent = "Joining...";
+    }
+    setLaunchStatus("Adding you to the launch list...", "");
+
+    try {
+      await addDoc(collection(db, "launchSignups"), {
+        name: signup.name,
+        email: signup.email,
+        area: signup.area,
+        interest: signup.interest,
+        message: signup.message,
+        consent: true,
+        createdAt: serverTimestamp(),
+        source: "website"
+      });
+
+      launchForm.reset();
+      setLaunchStatus("You're on the list. Thank you for supporting SayVah.", "success");
+    } catch (error) {
+      console.error("Unable to submit SayVah launch signup:", error);
+      setLaunchStatus("Sorry, we couldn't add you right now. Please try again in a moment.", "error");
+    } finally {
+      launchSubmitting = false;
+      launchForm.classList.remove("is-submitting");
+      if (launchSubmit) {
+        launchSubmit.disabled = false;
+        launchSubmit.textContent = "Join the Launch";
+      }
+    }
+  });
+}
+
+function setLaunchStatus(message, type) {
+  if (!launchStatus) return;
+  launchStatus.textContent = message;
+  launchStatus.classList.remove("success", "error");
+  if (type) launchStatus.classList.add(type);
+}
+
 
 if (locationsList) {
   const locationsQuery = query(

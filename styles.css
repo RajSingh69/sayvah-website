@@ -346,3 +346,55 @@ img { display:block; max-width:100%; }
     border-radius: 14px;
   }
 }
+/* Launch and signup additions */
+.launch-band { padding: 0 0 58px; margin-top: -28px; position: relative; z-index: 5; }
+.launch-card { display: grid; grid-template-columns: 1fr .9fr; gap: 30px; align-items: center; padding: 30px; border-radius: 28px; border: 1px solid rgba(85,217,239,.2); background: linear-gradient(145deg, rgba(12,27,43,.96), rgba(8,20,33,.96)); box-shadow: var(--shadow); }
+.launch-copy h2,.join-copy h2,.volunteer-card h2 { margin: 10px 0 12px; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.08; letter-spacing: -.04em; }
+.launch-copy p,.join-copy p,.volunteer-card p { color: var(--muted); font-size: 16px; margin: 0; }
+.launch-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.countdown { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.countdown-card { min-height: 112px; display: grid; place-items: center; align-content: center; gap: 4px; padding: 16px 10px; border-radius: 20px; border: 1px solid rgba(85,217,239,.18); background: rgba(85,217,239,.065); text-align: center; }
+.countdown-card strong { font-size: clamp(26px, 4vw, 42px); line-height: 1; color: #fff; }
+.countdown-card span { color: var(--cyan); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.countdown-live { grid-column: 1 / -1; padding: 26px; border-radius: 20px; border: 1px solid rgba(245,160,0,.3); background: rgba(245,160,0,.1); color: #ffd37c; font-size: 22px; font-weight: 800; text-align: center; }
+.join-section { background: radial-gradient(circle at 12% 10%, rgba(85,217,239,.09), transparent 28%), #07111d; }
+.join-grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: 54px; align-items: start; }
+.join-note { margin-top: 28px; padding: 20px; border-radius: 18px; border: 1px solid rgba(245,160,0,.25); background: rgba(245,160,0,.075); display: grid; gap: 5px; }
+.join-note span { color: #d5c19a; font-size: 14px; }
+.launch-form { display: grid; gap: 15px; padding: 26px; border-radius: 24px; border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow); }
+.form-field { display: grid; gap: 7px; }
+.launch-form label,.form-field label { font-size: 12px; font-weight: 800; color: #d6e2ec; }
+.launch-form input,.launch-form select,.launch-form textarea { width: 100%; min-height: 50px; border-radius: 13px; border: 1px solid #29435a; background: #081522; color: #fff; padding: 13px 14px; outline: none; }
+.launch-form textarea { resize: vertical; }
+.launch-form input:focus,.launch-form select:focus,.launch-form textarea:focus,.consent-row:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(85,217,239,.1); }
+.consent-row { display: grid; grid-template-columns: auto 1fr; gap: 11px; align-items: start; padding: 14px; border-radius: 14px; border: 1px solid rgba(85,217,239,.16); background: rgba(85,217,239,.045); cursor: pointer; }
+.consent-row input { width: 18px; height: 18px; min-height: 18px; margin-top: 2px; accent-color: var(--saffron); }
+.consent-row span { color: #c6d4df; font-size: 13px; }
+.form-status { min-height: 22px; margin: 0; color: var(--muted); font-size: 14px; }
+.form-status.success { color: #82e5af; }
+.form-status.error { color: #ffb0a6; }
+.launch-form.is-submitting { opacity: .82; }
+.launch-form button[disabled] { cursor: wait; filter: grayscale(.15); opacity: .8; }
+.volunteer-section { padding-top: 44px; }
+.volunteer-card { display: grid; grid-template-columns: 1fr auto; gap: 28px; align-items: center; padding: 34px; border-radius: 28px; border: 1px solid rgba(245,160,0,.32); background: linear-gradient(135deg, rgba(245,160,0,.12), rgba(12,27,43,.94) 45%, rgba(85,217,239,.06)); box-shadow: var(--shadow); }
+
+@media (max-width: 1020px) {
+  .launch-card,.join-grid,.volunteer-card { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .launch-band { margin-top: 0; padding-bottom: 36px; }
+  .launch-card,.launch-form,.volunteer-card { padding: 22px; border-radius: 22px; }
+  .countdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .countdown-card { min-height: 94px; }
+  .join-grid { gap: 26px; }
+  .launch-actions,.volunteer-card .button { width: 100%; }
+  .launch-actions .button,.volunteer-card .button,.launch-form .button { width: 100%; }
+}
+
+@media (max-width: 360px) {
+  .countdown { gap: 8px; }
+  .countdown-card { padding: 13px 8px; }
+  .countdown-card strong { font-size: 25px; }
+  .countdown-card span { font-size: 10px; }
+}
