@@ -13,7 +13,7 @@ Upload the contents of this folder to your web hosting public directory (`public
 
 ## Change before publishing
 1. In `script.js`, update `SUPPORT_EMAIL`.
-2. In `index.html`, replace the `#` App Store and Google Play links with the live store URLs.
+2. App Store and Google Play download links are set in `index.html`; update them there only if the live store URLs change.
 3. Replace the `#` Privacy Policy and Terms links when those pages are available.
 4. Update the visible statistics whenever required, or later connect them to Firebase.
 5. Replace the placeholder sevadaar cards with approved public profiles only.

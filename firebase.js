@@ -23,6 +23,12 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const locationsList = document.getElementById("live-locations");
+const ALLOWED_LAUNCH_INTERESTS = new Set([
+  "Volunteer / Sevadaar",
+  "I may use SayVah for support",
+  "Gurdwara / Organisation",
+  "Keep me updated"
+]);
 
 const launchForm = document.getElementById("launch-form");
 const launchSubmit = document.getElementById("launch-submit");
@@ -46,7 +52,7 @@ if (launchForm) {
       consent: formData.get("consent") === "on"
     };
 
-    if (!signup.name || !signup.email || !signup.area || !signup.interest || !signup.consent) {
+    if (!signup.name || !signup.email || !signup.area || !ALLOWED_LAUNCH_INTERESTS.has(signup.interest) || !signup.consent) {
       setLaunchStatus("Please complete the required fields and consent checkbox.", "error");
       return;
     }
@@ -76,7 +82,7 @@ if (launchForm) {
       launchForm.reset();
       setLaunchStatus("You're on the list. Thank you for supporting SayVah.", "success");
     } catch (error) {
-      console.error("Unable to submit SayVah launch signup:", error);
+      console.error("Unable to submit SayVah launch signup.", error?.code || error?.name || "unknown-error");
       setLaunchStatus("Sorry, we couldn't add you right now. Please try again in a moment.", "error");
     } finally {
       launchSubmitting = false;

@@ -1,6 +1,6 @@
 const SUPPORT_EMAIL = 'support@sayvah.co.uk';
 
-const LAUNCH_DATE = new Date('2026-08-31T23:00:00.000Z'); // 1 September 2026 at 00:00 UK time (BST).
+const LAUNCH_DATE = new Date('2026-08-31T23:00:00.000Z'); // 2026-09-01 00:00 Europe/London, which is 23:00 UTC during BST.
 const countdown = document.getElementById('launch-countdown');
 const countdownParts = {
   days: document.querySelector('[data-countdown="days"]'),
@@ -14,6 +14,9 @@ function updateCountdown() {
   const remaining = LAUNCH_DATE.getTime() - Date.now();
   if (remaining <= 0) {
     countdown.innerHTML = '<div class="countdown-live">SayVah is now live.</div>';
+    countdown.dataset.launched = 'true';
+    countdown.setAttribute('aria-label', 'SayVah is now live.');
+    if (countdownTimer) window.clearInterval(countdownTimer);
     return;
   }
 
@@ -27,16 +30,27 @@ function updateCountdown() {
   if (countdownParts.hours) countdownParts.hours.textContent = String(hours).padStart(2, '0');
   if (countdownParts.minutes) countdownParts.minutes.textContent = String(minutes).padStart(2, '0');
   if (countdownParts.seconds) countdownParts.seconds.textContent = String(seconds).padStart(2, '0');
+  countdown.setAttribute('aria-label', `${days} days, ${hours} hours, ${minutes} minutes and ${seconds} seconds until the SayVah community launch.`);
 }
 
+let countdownTimer = null;
 updateCountdown();
-setInterval(updateCountdown, 1000);
+if (countdown?.dataset.launched !== 'true') {
+  countdownTimer = setInterval(updateCountdown, 1000);
+}
 
 document.querySelectorAll('.volunteer-jump').forEach(link => {
-  link.addEventListener('click', () => {
+  link.addEventListener('click', event => {
     const interest = link.dataset.interest;
+    const form = document.getElementById('launch-form');
+    const nameField = document.getElementById('launch-name');
     const interestField = document.getElementById('launch-interest');
     if (interestField && interest) interestField.value = interest;
+    if (!form) return;
+
+    event.preventDefault();
+    form.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    window.setTimeout(() => nameField?.focus({ preventScroll: true }), 450);
   });
 });
 
@@ -91,7 +105,7 @@ document.querySelectorAll('.accordion article').forEach(item => {
     const isOpen = item.classList.toggle('open');
     button.setAttribute('aria-expanded', String(isOpen));
     const symbol = button.querySelector('span:last-child');
-    if (symbol) symbol.textContent = isOpen ? '−' : '＋';
+    if (symbol) symbol.textContent = isOpen ? '-' : '+';
   });
 });
 

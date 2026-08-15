@@ -398,3 +398,12 @@ img { display:block; max-width:100%; }
   .countdown-card strong { font-size: 25px; }
   .countdown-card span { font-size: 10px; }
 }
+
+
+/* Final launch polish */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(85,217,239,.75); outline-offset: 3px; }
+.countdown-card strong { font-variant-numeric: tabular-nums; }
+.launch-form input:invalid:not(:focus):not(:placeholder-shown), .launch-form select:invalid:not(:focus) { border-color: rgba(255,176,166,.72); }
+@media (max-width: 1020px) { .main-nav { max-height: calc(100vh - 92px); overflow-y: auto; } }
+@media (max-width: 700px) { .eyebrow,.section-kicker,.mini-kicker { letter-spacing: .1em; } .launch-copy h2,.join-copy h2,.volunteer-card h2 { font-size: 30px; } .live-location-card { align-items: flex-start; } .live-location-status { margin-left: 0; } }
+@media (max-width: 360px) { .container { width: min(100% - 22px,1180px); } .hero h1 { font-size: 34px; } .section-heading h2,.safety-hero h2,.download-card h2,.area-grid h2,.contact-grid h2 { font-size: 31px; } .button { padding-inline: 16px; } }

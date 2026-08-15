@@ -1,0 +1,17 @@
+{
+  "name": "sayvah-functions",
+  "description": "Firebase Cloud Functions for SayVah website notifications",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "lint": "node --check index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.3.2",
+    "nodemailer": "^6.9.16"
+  }
+}
