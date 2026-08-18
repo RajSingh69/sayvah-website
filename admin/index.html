@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="theme-color" content="#071321" />
+  <title>SayVah Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div id="auth-view" class="auth-view">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="brand-row">
+        <span class="brand-mark">S</span>
+        <div>
+          <h1 id="login-title">SayVah Admin</h1>
+          <p>Platform oversight and community operations</p>
+        </div>
+      </div>
+
+      <form id="login-form" class="login-form">
+        <label for="admin-email">Email / Username</label>
+        <input id="admin-email" name="email" type="email" autocomplete="email" required />
+        <label for="admin-password">Password</label>
+        <input id="admin-password" name="password" type="password" autocomplete="current-password" required />
+        <button id="login-button" class="primary-button" type="submit">Sign in</button>
+        <p id="auth-message" class="form-message" aria-live="polite"></p>
+      </form>
+
+      <div id="denied-panel" class="denied-panel" hidden>
+        <h2>Access denied</h2>
+        <p>This account is signed in, but it is not authorised as a SayVah admin.</p>
+        <button id="denied-signout" class="secondary-button" type="button">Sign out</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="admin-app" class="admin-app" hidden>
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <aside id="sidebar" class="sidebar" aria-label="Admin navigation">
+      <div class="sidebar-head">
+        <span class="brand-mark">S</span>
+        <div><strong>SayVah</strong><small>Admin Hub</small></div>
+      </div>
+      <nav id="admin-nav" class="admin-nav"></nav>
+      <div class="sidebar-user">
+        <span id="signed-in-as">Signed in</span>
+        <button id="signout-button" type="button">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main-shell">
+      <header class="topbar">
+        <button id="menu-button" class="icon-button" type="button" aria-label="Open navigation">☰</button>
+        <div>
+          <p class="kicker">Private admin</p>
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <div id="connection-pill" class="connection-pill">Firebase connected</div>
+      </header>
+      <section id="content" class="content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div id="detail-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" type="button" data-close-modal aria-label="Close">×</button>
+      <div id="modal-content"></div>
+    </section>
+  </div>
+
+  <div id="confirm-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-cancel-confirm></div>
+    <section class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h2 id="confirm-title">Confirm action</h2>
+      <p id="confirm-copy"></p>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="secondary-button" type="button">Cancel</button>
+        <button id="confirm-submit" class="danger-button" type="button">Confirm</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
+
