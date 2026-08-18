@@ -33,6 +33,7 @@ img { display:block; max-width:100%; }
 .brand-copy small { color:var(--muted); margin-top:4px; font-size:11px; letter-spacing:.05em; text-transform:uppercase; }
 .main-nav { display:flex; align-items:center; gap:23px; font-size:14px; color:#c8d3df; }
 .main-nav a:hover { color:#fff; }
+.nav-admin-button { padding:10px 15px; border-radius:14px; border:1px solid rgba(85,217,239,.42); background:rgba(85,217,239,.07); color:#dffaff !important; font-weight:700; white-space:nowrap; }
 .nav-button { padding:11px 17px; border-radius:14px; border:1px solid rgba(245,160,0,.45); background:rgba(245,160,0,.12); color:#ffd47a !important; font-weight:700; }
 .menu-toggle { display:none; background:none; border:0; width:44px; height:44px; padding:9px; }
 .menu-toggle span { display:block; height:2px; background:#fff; margin:6px 0; border-radius:4px; }
@@ -407,3 +408,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 1020px) { .main-nav { max-height: calc(100vh - 92px); overflow-y: auto; } }
 @media (max-width: 700px) { .eyebrow,.section-kicker,.mini-kicker { letter-spacing: .1em; } .launch-copy h2,.join-copy h2,.volunteer-card h2 { font-size: 30px; } .live-location-card { align-items: flex-start; } .live-location-status { margin-left: 0; } }
 @media (max-width: 360px) { .container { width: min(100% - 22px,1180px); } .hero h1 { font-size: 34px; } .section-heading h2,.safety-hero h2,.download-card h2,.area-grid h2,.contact-grid h2 { font-size: 31px; } .button { padding-inline: 16px; } }
+
+
+
