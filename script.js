@@ -99,6 +99,29 @@ function showGuide(key) {
 document.querySelectorAll('.guide-card').forEach(card => card.addEventListener('click', () => showGuide(card.dataset.guide)));
 showGuide('account');
 
+
+const privacyToggle = document.querySelector('.privacy-toggle');
+const privacyContent = document.getElementById('privacy-content');
+const privacyToggleLabel = document.querySelector('[data-privacy-toggle-label]');
+privacyToggle?.addEventListener('click', () => {
+  const isOpen = privacyToggle.getAttribute('aria-expanded') === 'true';
+  const nextOpen = !isOpen;
+  privacyToggle.setAttribute('aria-expanded', String(nextOpen));
+  if (privacyToggleLabel) privacyToggleLabel.textContent = nextOpen ? 'Hide Privacy & Data Information' : 'View Privacy & Data Information';
+  if (!privacyContent) return;
+
+  if (nextOpen) {
+    privacyContent.hidden = false;
+    window.requestAnimationFrame(() => privacyContent.classList.add('is-open'));
+    return;
+  }
+
+  privacyContent.classList.remove('is-open');
+  window.setTimeout(() => {
+    if (privacyToggle.getAttribute('aria-expanded') !== 'true') privacyContent.hidden = true;
+  }, 260);
+});
+
 document.querySelectorAll('.accordion article').forEach(item => {
   const button = item.querySelector('button');
   button?.addEventListener('click', () => {

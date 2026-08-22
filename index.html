@@ -37,6 +37,7 @@
         <a href="#launch">Launch</a>
         <a href="#join">Join</a>
         <a href="#safety">Safety</a>
+        <a href="#privacy">Privacy &amp; Data</a>
         <a href="#guides">Help guides</a>
         <a href="#faq">FAQs</a>
         <a class="nav-admin-button" href="/admin/">Admin Login</a>
@@ -186,6 +187,16 @@
           <h2>Join the first SayVah community</h2>
           <p>We're starting small and growing area by area. Join the launch list if you want to volunteer, use SayVah for support, represent a Gurdwara or organisation, or simply follow the project.</p>
           <div class="join-note"><strong>Launch list</strong><span>We'll only contact you about SayVah launch updates and relevant community opportunities.</span></div>
+          <div class="privacy-trust-card" aria-labelledby="before-join-title">
+            <strong id="before-join-title">Before you join SayVah</strong>
+            <div class="trust-pills" aria-label="Privacy reassurance">
+              <span>Your Data</span>
+              <span>Your Privacy</span>
+              <span>Your Safety</span>
+              <span>Your Control</span>
+            </div>
+            <a class="text-link" href="#privacy">Learn how SayVah handles your information</a>
+          </div>
         </div>
         <form class="launch-form" id="launch-form" novalidate>
           <div class="form-field"><label for="launch-name">Full name</label><input id="launch-name" name="name" type="text" autocomplete="name" required /></div>
@@ -194,6 +205,7 @@
           <div class="form-field"><label for="launch-interest">How would you like to be involved-</label><select id="launch-interest" name="interest" required><option value="">Choose one</option><option value="Volunteer / Sevadaar">Volunteer / Sevadaar</option><option value="I may use SayVah for support">I may use SayVah for support</option><option value="Gurdwara / Organisation">Gurdwara / Organisation</option><option value="Keep me updated">Keep me updated</option></select></div>
           <div class="form-field"><label for="launch-message">Optional message</label><textarea id="launch-message" name="message" rows="4"></textarea></div>
           <label class="consent-row" for="launch-consent"><input id="launch-consent" name="consent" type="checkbox" required /><span>I'm happy for SayVah to contact me about the launch and relevant community opportunities.</span></label>
+          <p class="privacy-form-note"><strong>Your privacy matters.</strong> Before joining, you can read exactly how SayVah handles your information. <a href="#privacy">Read Privacy &amp; Data</a>.</p>
           <button class="button button-primary" type="submit" id="launch-submit">Join the Launch</button>
           <p class="form-status" id="launch-form-status" aria-live="polite"></p>
         </form>
@@ -267,6 +279,67 @@
       </div>
     </section>
 
+
+    <section class="section privacy-section" id="privacy" aria-labelledby="privacy-title">
+      <div class="container">
+        <article class="privacy-disclosure-card">
+          <div class="privacy-disclosure-summary">
+            <span class="privacy-shield" aria-hidden="true">i</span>
+            <div>
+              <span class="section-kicker">Privacy &amp; Data</span>
+              <h2 id="privacy-title">Your Privacy. Your Data. Your SayVah.</h2>
+              <p>See what information SayVah collects, why it is needed, where it is stored, who can access it and the controls available to you.</p>
+            </div>
+          </div>
+          <button class="privacy-toggle" type="button" aria-expanded="false" aria-controls="privacy-content">
+            <span data-privacy-toggle-label>View Privacy &amp; Data Information</span>
+            <span class="privacy-chevron" aria-hidden="true">v</span>
+          </button>
+
+          <div class="privacy-content" id="privacy-content" hidden>
+            <div class="privacy-intro-panel">
+              <p>SayVah processes personal information to provide the service, connect requesters with Sevadaars, operate community safety features, administer accounts and support participating areas and organisations.</p>
+              <p>This section explains the main categories of information used by SayVah, how that information is used and the controls available to users.</p>
+            </div>
+
+            <div class="privacy-callout-grid">
+              <article class="privacy-callout cyan-card"><span class="icon-box cyan-box">1</span><h3>Clear categories</h3><p>SayVah explains the main account, activity, communication, safety, location and website information used to operate the service.</p></article>
+              <article class="privacy-callout saffron-card"><span class="icon-box saffron-box">!</span><h3>No unsupported claims</h3><p>SayVah does not describe data as time-limited, UK-only, end-to-end encrypted or automatically deleted unless that is confirmed by the implemented service.</p></article>
+            </div>
+
+            <div class="privacy-visibility">
+              <article><h3>Other SayVah users may see</h3><ul><li>Public profile information needed for community interaction.</li><li>Name and profile image where these are displayed in the app.</li><li>Role, area and verification or trust indicators where applicable.</li><li>Information intentionally included in a community request.</li></ul></article>
+              <article><h3>Not intended for public display</h3><ul><li>Account email address.</li><li>Private contact details and internal account administration fields.</li><li>Reports, moderation notes and safety review information.</li><li>Internal verification review information and evidence fields.</li></ul></article>
+            </div>
+
+            <div class="privacy-feature-grid">
+              <article class="privacy-feature location-feature"><span class="mini-kicker saffron-text">Location &amp; Live Seva</span><h3>Location &amp; Live Seva</h3><p>SayVah includes location-related functionality associated with active Seva and safety features. Location information is not intended to be displayed publicly to the wider SayVah community.</p><dl><div><dt>Active areas</dt><dd>SayVah uses area and location records to show active SayVah service areas.</dd></div><div><dt>Location sessions</dt><dd>SayVah includes location-session records for location-enabled features. The exact app trigger for location permission must be confirmed from the live app before SayVah describes a specific permission moment publicly.</dd></div><div><dt>Administrator access</dt><dd>Authorised SayVah administrators may access location-related records where required to operate the service, support active Seva or investigate safety issues.</dd></div><div><dt>Retention</dt><dd>SayVah does not currently publish a fixed location-data retention period. This must be specified in the full Privacy Notice before location retention is represented as time-limited.</dd></div></dl></article>
+              <article class="privacy-feature"><span class="mini-kicker">Messages</span><h3>Are my messages private?</h3><p>Messages are stored as part of the SayVah service and are intended for the participants involved in the relevant conversation or request. Authorised SayVah administrators may access relevant conversations when necessary for platform administration, moderation, safeguarding, investigating reports or resolving disputes. SayVah does not describe messages as end-to-end encrypted.</p></article>
+              <article class="privacy-feature"><span class="mini-kicker">Verification</span><h3>How does verification work?</h3><p>Verification decisions and review status are recorded against the user's SayVah account. Authorised administrators can review and approve or deny verification. Verification records may include whether the account is verified, the verification status, approval status, review date, reviewing administrator and review message. SayVah does not currently operate a general ID-document upload system unless an identity document is specifically requested through an implemented verification process.</p></article>
+            </div>
+
+            <div class="data-sale-card"><strong>SayVah does not sell users' personal information.</strong><span>SayVah does not currently use users' personal information to operate third-party advertising within the service.</span></div>
+
+            <div class="accordion privacy-accordion" aria-label="Privacy and data questions">
+              <article><button aria-expanded="false"><span>What information does SayVah collect?</span><span>+</span></button><div><p><strong>Account information:</strong> name, email address, Firebase account identifier, profile information, profile photograph where supplied, account role, selected area or location, and account or verification status.</p><p><strong>SayVah activity:</strong> requests created, requests accepted or helped with, request status and activity, completed Seva, ratings or feedback where used, and help connections.</p><p><strong>Communication:</strong> in-app chats, messages associated with requests, message timestamps and conversation participants.</p><p><strong>Safety and administration:</strong> reports, moderation information, verification status, verification review information, account restrictions such as hidden or banned state, and Gurdwara or organisation affiliation where applicable.</p><p><strong>Location-related information:</strong> location or session information where a location-enabled SayVah feature is being used.</p><p><strong>Website launch signups:</strong> name, email address, area, interest, optional message, consent, submission time and source.</p></div></article>
+              <article><button aria-expanded="false"><span>Why does SayVah need this information?</span><span>+</span></button><div><p>SayVah uses information to create and administer accounts, connect requesters with Sevadaars, manage requests, support in-app communication, operate safety reporting, review verification, maintain community areas, support Gurdwara or organisation involvement where applicable, and contact launch-list users about SayVah updates they consented to receive.</p></div></article>
+              <article><button aria-expanded="false"><span>Where is my information stored?</span><span>+</span></button><div><p>SayVah uses Google Firebase and Google Cloud services to operate its backend infrastructure. Firebase Authentication is used for account authentication. Cloud Firestore is used for application data such as users, requests, chats, reports, locations, organisations and launch signups. Firebase and Google Cloud infrastructure also supports backend functionality, including launch signup notifications.</p><p>SayVah has Firebase Storage configured, but this public information should not be read as confirmation that a general user-file upload flow is active. Google may process or store data through the infrastructure used to provide these services. SayVah does not describe user data as being stored exclusively in the United Kingdom unless that can be guaranteed by the configured service.</p></div></article>
+              <article><button aria-expanded="false"><span>Who can see my information?</span><span>+</span></button><div><p><strong>Other users:</strong> Other SayVah users may see information required for community interaction, such as public profile information, name or profile image where displayed, role, area, verification or trust indicators, and information intentionally included in a community request.</p><p><strong>Authorised SayVah administrators:</strong> Authorised SayVah administrators can access account and platform information where required to operate the service, review verification, investigate reports, manage requests and maintain community safety. This can include access to relevant in-app conversations where required for moderation, safeguarding or investigation of a report.</p><p><strong>Gurdwaras and organisations:</strong> SayVah stores Gurdwara and organisation records and affiliation information where applicable. SayVah does not state that every Gurdwara or organisation can see every user's information.</p></div></article>
+              <article><button aria-expanded="false"><span>Can other users see my email address?</span><span>+</span></button><div><p>No. Your account email address is not intended to be displayed publicly to other SayVah users. Authorised SayVah administrators may access account email information where required for administration, support, verification, safety review or account management.</p></div></article>
+              <article><button aria-expanded="false"><span>Can other users see my private account details?</span><span>+</span></button><div><p>Private contact details, internal account fields, moderation information, reports and verification review information are not intended for public display. Relevant administrators may access these records where required to operate SayVah and maintain community safety.</p></div></article>
+              <article><button aria-expanded="false"><span>What can Gurdwaras or organisations see?</span><span>+</span></button><div><p>SayVah can record Gurdwara or organisation names, areas, status and administrator or manager fields, along with user affiliation where applicable. More specific Gurdwara or organisation access rights should only be stated once they are confirmed in the live app and access rules.</p></div></article>
+              <article><button aria-expanded="false"><span>What happens when I report a user?</span><span>+</span></button><div><p>When a user submits a safety report, SayVah stores information needed to review that report. Authorised administrators can review reports and relevant associated account, request or conversation information in order to investigate and take appropriate action. Implemented administrator actions include resolving or dismissing reports, reviewing verification, hiding a user and banning or restricting a user.</p></div></article>
+              <article><button aria-expanded="false"><span>Can I delete my account?</span><span>+</span></button><div><p>SayVah provides an in-app account deletion process. Account deletion removes the user's account through the implemented deletion process. Some associated information may need to be retained where necessary for security, dispute handling, legal obligations or the integrity of records. The complete retention treatment will be specified in the full Privacy Notice.</p></div></article>
+              <article><button aria-expanded="false"><span>How long is information kept?</span><span>+</span></button><div><p>SayVah retains information while it is required to operate accounts, requests, communications, safety functions and platform records. A formal retention schedule is being established for categories including messages, completed requests, reports and location-session information.</p></div></article>
+              <article><button aria-expanded="false"><span>Your information and your choices</span><span>+</span></button><div><p>Users can update supported profile information, manage relevant account settings, report or block users where implemented, delete their account using the in-app deletion feature, and contact SayVah about information associated with their account.</p></div></article>
+            </div>
+
+            <div class="privacy-contact-card"><div><span class="section-kicker saffron-text">Questions about your information?</span><h3>Contact SayVah directly.</h3><p>If you have a question about how SayVah uses your information, privacy, account data or a safety-related concern, contact SayVah directly.</p><p><strong>Privacy &amp; Data:</strong> <a href="mailto:rajan@s3dsystems.com">rajan@s3dsystems.com</a></p></div><div class="privacy-contact-actions"><a class="button button-primary" href="mailto:rajan@s3dsystems.com">Email SayVah</a><a class="button button-secondary" href="/privacy/">Read the full Privacy Notice</a></div></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section class="section section-panel" id="sevadaars">
       <div class="container">
         <div class="section-heading split-heading">
@@ -334,7 +407,7 @@
 
     <section class="section download-section" id="download">
       <div class="container download-card">
-        <div><span class="section-kicker saffron-text">Available on iOS and Android</span><h2>Take the community with you.</h2><p>Download the app now, join the launch list, and be ready for the official community launch on 1 September 2026.</p></div>
+        <div><span class="section-kicker saffron-text">Available on iOS and Android</span><h2>Take the community with you.</h2><p>Download the app now, join the launch list, and be ready for the official community launch on 1 September 2026.</p><p class="download-privacy-line">Before you join, read how SayVah handles your information. <a href="#privacy">Privacy &amp; Data</a></p></div>
         <div class="download-actions">
           <a class="store-button" href="https://apps.apple.com/gb/app/id6772755865" target="_blank" rel="noopener noreferrer" aria-label="Download SayVah on the App Store"><small>Download on the</small><strong>App Store</strong></a>
           <a class="store-button" href="https://play.google.com/store/apps/details?id=com.sayvah.app&amp;hl=en_GB" target="_blank" rel="noopener noreferrer" aria-label="Get SayVah on Google Play"><small>Get it on</small><strong>Google Play</strong></a>
@@ -361,7 +434,7 @@
     <div class="container footer-grid">
       <div><a class="brand" href="#top"><span class="brand-mark">ੴ</span><span class="brand-copy"><strong>SayVah</strong><small>Seva made simple</small></span></a><p>Helping communities support one another through seva.</p></div>
       <div><h3>Explore</h3><a href="#what">What is SayVah-</a><a href="#how">How it works</a><a href="#safety">Safety</a><a href="#guides">Help guides</a></div>
-      <div><h3>Important</h3><a href="#">Privacy policy</a><a href="#">Terms of use</a><a href="#contact">Contact</a></div>
+      <div><h3>Important</h3><a href="/privacy/">Privacy Notice</a><a href="#privacy">Privacy &amp; Data</a><a href="#">Terms of use</a><a href="#contact">Contact</a></div>
       <div><h3>Platform</h3><a href="/admin/">Admin Login</a></div>
     </div>
     <div class="container footer-bottom"><span>© <span id="year"></span> SayVah. All rights reserved.</span><span>Community first. Seva always.</span></div>
