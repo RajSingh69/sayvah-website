@@ -533,25 +533,36 @@ async function safeGet(collectionName, order, max) {
   return value;
 }
 
+function setAdminView(view) {
+  const showAuth = view === "auth";
+  const showAdmin = view === "admin";
+  el.authView.hidden = !showAuth;
+  el.adminApp.hidden = !showAdmin;
+  el.authView.classList.toggle("is-hidden", !showAuth);
+  el.adminApp.classList.toggle("is-hidden", !showAdmin);
+}
 function showLogin() {
-  el.authView.hidden = false;
-  el.adminApp.hidden = true;
+  setAdminView("auth");
   el.deniedPanel.hidden = true;
   el.loginForm.hidden = false;
   setLoginLoading(false);
   showAuthMessage("", "");
 }
 function showDenied(message = "") {
-  el.authView.hidden = false;
-  el.adminApp.hidden = true;
+  setAdminView("auth");
   el.loginForm.hidden = true;
   el.deniedPanel.hidden = false;
   showAuthMessage(message, "error");
 }
 function showAdmin() {
-  el.authView.hidden = true;
-  el.adminApp.hidden = false;
+  setAdminView("admin");
   el.signedInAs.textContent = `Signed in as ${displayName(state.adminProfile) || state.user.email}`;
+  console.info("ADMIN VIEW STATE", {
+    authHidden: el.authView.hidden,
+    adminHidden: el.adminApp.hidden,
+    authDisplay: getComputedStyle(el.authView).display,
+    adminDisplay: getComputedStyle(el.adminApp).display
+  });
   window.setTimeout(() => {
     try {
       startVerificationListener();
