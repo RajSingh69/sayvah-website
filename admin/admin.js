@@ -20,7 +20,8 @@ import {
   updateDoc,
   addDoc,
   serverTimestamp,
-  getCountFromServer
+  getCountFromServer,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -63,7 +64,7 @@ const navItems = [
   ["sevadaars", "Sevadaars", "V"],
   ["requesters", "Requesters", "R"],
   ["both", "Both Roles", "B"],
-  ["verification", "Verification", "K"],
+  ["verification", "Account Verification", "K"],
   ["chats", "Chats", "✉"],
   ["reports", "Reports & Safety", "!"],
   ["areas", "Areas", "⌖"],
@@ -79,7 +80,11 @@ const state = {
   adminProfile: null,
   page: "dashboard",
   cache: new Map(),
-  filters: {}
+  filters: {},
+  verificationRows: [],
+  verificationUnsubscribe: null,
+  authHandlingUid: null,
+  authHandlingPromise: null
 };
 
 const el = {
@@ -111,39 +116,109 @@ renderNav();
 bindChrome();
 
 onAuthStateChanged(auth, async (user) => {
-  state.user = user;
-  state.adminProfile = null;
-  state.cache.clear();
-  if (!user) return showLogin();
-  showAuthMessage("Checking admin access...", "");
-  try {
-    const profileSnap = await getDoc(doc(db, COLLECTIONS.users, user.uid));
-    const profile = profileSnap.exists() ? { id: profileSnap.id, ...profileSnap.data() } : null;
-    if (!profile || profile.role !== "admin") return showDenied();
-    state.adminProfile = profile;
-    showAdmin();
-    await renderPage(state.page);
-  } catch (error) {
-    showDenied("Unable to verify admin access. Firestore rules may need the admin user read rule.");
-    console.error("Admin verification failed", error);
+  if (!user) {
+    resetAdminState();
+    return showLogin();
   }
+  await handleAuthenticatedUser(user, { source: "restored-session" });
 });
 
 el.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  el.loginButton.disabled = true;
-  el.loginButton.textContent = "Signing in...";
-  showAuthMessage("Signing in...", "");
+  setLoginLoading(true, "Signing in...");
   const form = new FormData(el.loginForm);
   try {
-    await signInWithEmailAndPassword(auth, String(form.get("email")).trim(), String(form.get("password")));
+    console.info("SayVah admin authentication started.");
+    const credential = await withTimeout(
+      signInWithEmailAndPassword(auth, String(form.get("email")).trim(), String(form.get("password"))),
+      "auth-timeout"
+    );
+    console.info("SayVah admin authentication succeeded.", { uid: credential.user.uid });
+    await handleAuthenticatedUser(credential.user, { source: "login-submit" });
   } catch (error) {
+    console.error("SayVah admin sign-in failed", error);
+    resetAdminState();
+    showLogin();
     showAuthMessage(authError(error), "error");
   } finally {
-    el.loginButton.disabled = false;
-    el.loginButton.textContent = "Sign in";
+    if (el.adminApp.hidden) setLoginLoading(false);
   }
 });
+
+async function handleAuthenticatedUser(user, options = {}) {
+  if (state.authHandlingPromise && state.authHandlingUid === user.uid) return state.authHandlingPromise;
+  state.authHandlingUid = user.uid;
+  state.authHandlingPromise = handleAuthenticatedUserCore(user, options).finally(() => {
+    state.authHandlingUid = null;
+    state.authHandlingPromise = null;
+  });
+  return state.authHandlingPromise;
+}
+
+async function handleAuthenticatedUserCore(user, options = {}) {
+  state.user = user;
+  state.adminProfile = null;
+  state.cache.clear();
+  showAuthMessage("Checking admin access...", "");
+  try {
+    console.info("SayVah admin profile lookup started.", { uid: user.uid, source: options.source || "unknown" });
+    const profileSnap = await withTimeout(getDoc(doc(db, COLLECTIONS.users, user.uid)), "profile-timeout");
+    if (!profileSnap.exists()) {
+      console.error("SayVah admin profile not found.", { uid: user.uid });
+      await signOut(auth).catch((error) => console.error("SayVah admin sign-out after missing profile failed", error));
+      showDenied("Firestore user profile missing for this Firebase account.");
+      return;
+    }
+
+    const profile = { id: profileSnap.id, ...profileSnap.data() };
+    console.info("SayVah admin profile found.", { uid: user.uid, role: profile.role || "not-set" });
+    if (profile.role !== "admin") {
+      console.error("SayVah admin role denied.", { uid: user.uid, role: profile.role || "not-set" });
+      await signOut(auth).catch((error) => console.error("SayVah admin sign-out after role denial failed", error));
+      showDenied("User authenticated but role is not admin.");
+      return;
+    }
+
+    console.info("SayVah admin role accepted.", { uid: user.uid });
+    state.adminProfile = profile;
+    showAdmin();
+    console.info("SayVah admin dashboard initialisation started.");
+    renderPage(state.page)
+      .then(() => console.info("SayVah admin dashboard initialisation completed."))
+      .catch((error) => {
+        console.error("SayVah admin dashboard initialisation failed", error);
+        setContent(errorPanel(error));
+      });
+  } catch (error) {
+    console.error("SayVah admin verification failed", error);
+    resetAdminState();
+    showLogin();
+    showAuthMessage(authError(error), "error");
+  }
+}
+
+function withTimeout(promise, code, ms = 12000) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(Object.assign(new Error(code), { code })), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+}
+
+function setLoginLoading(loading, message = "") {
+  el.loginButton.disabled = loading;
+  el.loginButton.textContent = loading ? "Signing in..." : "Sign in";
+  showAuthMessage(message, loading ? "" : "error");
+}
+
+function resetAdminState() {
+  state.user = null;
+  state.adminProfile = null;
+  state.cache.clear();
+  state.authHandlingUid = null;
+  state.authHandlingPromise = null;
+  stopVerificationListener();
+}
 
 function bindChrome() {
   el.signout.addEventListener("click", () => signOut(auth));
@@ -156,7 +231,12 @@ function bindChrome() {
 }
 
 function renderNav() {
-  el.nav.innerHTML = navItems.map(([id, label, icon]) => `<button class="nav-item" data-page="${id}" type="button"><span>${icon}</span>${label}</button>`).join("");
+  const pending = state.verificationRows.filter((row) => verificationState(row) === "pending").length;
+  el.nav.innerHTML = navItems.map(([id, label, icon]) => {
+    const badge = id === "verification" && pending ? `<strong class="nav-badge">${pending}</strong>` : "";
+    const attention = id === "verification" && pending ? " has-pending" : "";
+    return `<button class="nav-item${attention}" data-page="${id}" type="button"><span>${icon}</span><span class="nav-label">${label}</span>${badge}</button>`;
+  }).join("");
   el.nav.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
       state.page = button.dataset.page;
@@ -272,15 +352,49 @@ async function renderUsersModule(mode) {
 }
 
 async function renderVerificationModule() {
-  const rows = (await safeGet(COLLECTIONS.users, ["createdAt", "desc"], 300)).rows;
+  if (!state.verificationRows.length) {
+    state.verificationRows = (await safeGet(COLLECTIONS.users, ["createdAt", "desc"], 500)).rows;
+  }
+  startVerificationListener();
+  renderVerificationContent();
+}
+
+function stopVerificationListener() {
+  if (state.verificationUnsubscribe) state.verificationUnsubscribe();
+  state.verificationUnsubscribe = null;
+  state.verificationRows = [];
+  renderNav();
+}
+
+function startVerificationListener() {
+  if (!state.user || state.verificationUnsubscribe) return;
+  state.verificationUnsubscribe = onSnapshot(
+    query(collection(db, COLLECTIONS.users), orderBy("createdAt", "desc"), limit(500)),
+    (snapshot) => {
+      state.verificationRows = snapshot.docs.map((snap) => ({ id: snap.id, ...snap.data() }));
+      renderNav();
+      if (state.page === "verification") renderVerificationContent();
+    },
+    (error) => console.error("Verification listener failed", error)
+  );
+}
+
+function renderVerificationContent() {
+  const rows = [...state.verificationRows].sort(verificationSort);
   const tab = state.filters.verification || "pending";
   const filtered = tab === "all" ? rows : rows.filter((row) => verificationState(row) === tab);
+  const stats = [
+    ["Pending", rows.filter((row) => verificationState(row) === "pending").length],
+    ["Verified", rows.filter((row) => verificationState(row) === "verified").length],
+    ["Changes Required", rows.filter((row) => verificationState(row) === "changes_required").length]
+  ];
   setContent(`
-    ${tabbar("verification", ["pending", "verified", "denied", "unverified", "all"], tab)}
+    <div class="stats-grid verification-stats">${stats.map(([label, value]) => statCard(label, value)).join("")}</div>
+    ${tabbar("verification", ["pending", "verified", "changes_required", "all"], tab)}
     <section class="panel">
-      <div class="panel-head"><h2>Verification Hub</h2><span class="muted">${filtered.length} shown</span></div>
-      ${userTable(filtered)}
-      ${cards(filtered, userCard)}
+      <div class="panel-head"><h2>Account Verification</h2><span class="muted">${filtered.length} shown</span></div>
+      ${genericTable(filtered, ["User", "Area", "Status", "Submitted", "Reviewed"], verificationCells)}
+      ${cards(filtered, verificationCard)}
     </section>
   `);
   bindTabs("verification");
@@ -432,6 +546,7 @@ function showLogin() {
   el.adminApp.hidden = true;
   el.deniedPanel.hidden = true;
   el.loginForm.hidden = false;
+  setLoginLoading(false);
   showAuthMessage("", "");
 }
 function showDenied(message = "") {
@@ -445,6 +560,7 @@ function showAdmin() {
   el.authView.hidden = true;
   el.adminApp.hidden = false;
   el.signedInAs.textContent = `Signed in as ${displayName(state.adminProfile) || state.user.email}`;
+  startVerificationListener();
 }
 function showAuthMessage(message) { el.authMessage.textContent = message; }
 function setContent(html) { el.content.innerHTML = html; }
@@ -455,7 +571,8 @@ function statCard(label, value) { return `<article class="stat-card"><span>${esc
 function activityBlock(title, rows, titleFn) {
   return `<article class="record-card"><h3>${escapeHtml(title)}</h3>${rows.length ? rows.map((row) => `<p><strong>${escapeHtml(titleFn(row))}</strong><br><span class="muted">${formatDate(row.createdAt || row.updatedAt || row.timestamp)}</span></p>`).join("") : `<p class="muted">No recent records found.</p>`}</article>`;
 }
-function tabbar(key, tabs, current) { return `<div class="tabbar">${tabs.map((tab) => `<button type="button" data-filter-key="${escapeHtml(key)}" data-filter-value="${escapeHtml(tab)}" class="${tab === current ? "active" : ""}">${escapeHtml(tab)}</button>`).join("")}</div>`; }
+function tabbar(key, tabs, current) { return `<div class="tabbar">${tabs.map((tab) => `<button type="button" data-filter-key="${escapeHtml(key)}" data-filter-value="${escapeHtml(tab)}" class="${tab === current ? "active" : ""}">${escapeHtml(tabLabel(tab))}</button>`).join("")}</div>`; }
+function tabLabel(value) { return ({ pending: "Pending", verified: "Approved", changes_required: "Changes Required", all: "All" })[value] || value; }
 function bindTabs(key) {
   document.querySelectorAll(`[data-filter-key="${CSS.escape(key)}"]`).forEach((button) => button.addEventListener("click", () => {
     state.filters[key] = button.dataset.filterValue;
@@ -467,9 +584,9 @@ function userToolbar(key, sevadaarsOnly) {
   return `<div class="toolbar">
     <input data-user-filter="${key}" data-field="search" value="${escapeAttr(f.search || "")}" placeholder="Search name or email" />
     <select data-user-filter="${key}" data-field="role"><option value="">All roles</option>${["admin","requester","sevadaar","user"].map((v) => option(v, f.role)).join("")}</select>
-    <select data-user-filter="${key}" data-field="verification"><option value="">All verification</option>${["verified","pending","denied","unverified"].map((v) => option(v, f.verification)).join("")}</select>
+    <select data-user-filter="${key}" data-field="verification"><option value="">All verification</option>${["verified","pending","changes_required","unverified"].map((v) => option(v, f.verification)).join("")}</select>
     <select data-user-filter="${key}" data-field="state"><option value="">All states</option>${["hidden","banned","active"].map((v) => option(v, f.state)).join("")}</select>
-  </div>${sevadaarsOnly ? tabbar(key, ["verified","pending","denied","unverified","hidden","banned","all"], f.quick || "all") : ""}`;
+  </div>${sevadaarsOnly ? tabbar(key, ["verified","pending","changes_required","unverified","hidden","banned","all"], f.quick || "all") : ""}`;
 }
 function option(value, selected) { return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`; }
 function bindUserToolbar(key) {
@@ -494,6 +611,7 @@ function bindRecordClicks(rows, type) {
 }
 function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(nameOrId(r.requesterName || r.requesterId || r.userId))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}</td>`; }
 function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(u.role || u.userType || u.accountType || "user")}</td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationState(u))}<br><span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span><br><span class="muted">Evidence: ${evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "none"}</span></td>`; }
+function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
 function chatCells(c) { return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`; }
 function reportCells(r) { return `<td>${escapeHtml(r.reason || r.type || r.id)}<br><span class="muted">${escapeHtml(r.description || "")}</span></td><td>${escapeHtml(nameOrId(r.reporterName || r.reporterId))}</td><td>${escapeHtml(nameOrId(r.reportedUserName || r.reportedUserId || r.userId))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt || r.timestamp)}</td>`; }
 function orgCells(o) { return `<td>${escapeHtml(o.name || o.title || o.id)}</td><td>${escapeHtml(areaOf(o) || o.location || "")}</td><td>${statusPill(o.active === false ? "inactive" : (o.status || "active"))}</td><td>${escapeHtml(list(o.admins || o.adminIds || o.managedBy))}</td><td>${formatDate(o.updatedAt || o.createdAt)}</td>`; }
@@ -501,6 +619,7 @@ function signupCells(s) { return `<td>${escapeHtml(s.name || "Not provided")}</t
 function qaCells(q) { return `<td>${escapeHtml(q.question || q.title || q.id)}</td><td>${escapeHtml(nameOrId(q.submitterName || q.userId || q.uid))}</td><td>${statusPill(q.status || (q.approved ? "approved" : "pending"))}</td><td>${escapeHtml(q.answer || q.response || "")}</td>`; }
 function requestCard(r) { return recordCard(r, requestTitle(r), { ID: r.id, Requester: nameOrId(r.requesterName || r.requesterId || r.userId), Area: areaOf(r), Status: r.status || "unknown", Created: formatDate(r.createdAt) }); }
 function userCard(u) { return recordCard(u, displayName(u), { UID: u.id, Email: u.email || "", Role: u.role || u.userType || u.accountType || "user", Area: areaOf(u), Verification: verificationState(u), Approved: u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded", Evidence: evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "No ID verification document is currently stored for this user.", Joined: formatDate(u.createdAt) }); }
+function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div>${statusPill(verificationLabel(u))}</div></article>`; }
 function chatCard(c) { return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) }); }
 function reportCard(r) { return recordCard(r, r.reason || r.type || r.id, { Reporter: nameOrId(r.reporterName || r.reporterId), Reported: nameOrId(r.reportedUserName || r.reportedUserId || r.userId), Status: r.status || "unknown", Date: formatDate(r.createdAt || r.timestamp) }); }
 function orgCard(o) { return recordCard(o, o.name || o.title || o.id, { Area: areaOf(o) || o.location || "", Status: o.active === false ? "inactive" : (o.status || "active"), Admins: list(o.admins || o.adminIds || o.managedBy) }); }
@@ -520,7 +639,10 @@ async function openDetail(type, row) {
 function closeModal() { el.detailModal.hidden = true; }
 function actionButtons(type, row) {
   if (type === "area") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="soft-button" data-action="toggle-area">${row.active === false ? "Activate area" : "Deactivate area"}</button></div></div>`;
-  if (type === "user") return `<div class="panel"><h2>Admin actions</h2><div class="field"><label for="review-message">Review message</label><textarea id="review-message"></textarea></div><div class="action-row"><button class="soft-button" data-action="approve-verification">Approve verification</button><button class="danger-button" data-action="deny-verification">Deny verification</button><button class="danger-button" data-action="toggle-hidden">${row.hidden ? "Unhide user" : "Hide user"}</button><button class="danger-button" data-action="toggle-banned">${row.banned ? "Unban user" : "Ban user"}</button></div></div>`;
+  if (type === "user") {
+    const verified = verificationState(row) === "verified";
+    return `<div class="panel"><h2>Admin actions</h2><div class="field"><label for="review-message">Required reason for denied / changes requested</label><textarea id="review-message">${escapeHtml(row.verificationReviewMessage || "")}</textarea></div><div class="action-row"><button class="primary-button" data-action="approve-verification" ${verified ? "disabled" : ""}>Approve</button><button class="danger-button" data-action="deny-verification">Deny / Request Changes</button><button class="danger-button" data-action="toggle-hidden">${row.hidden ? "Unhide user" : "Hide user"}</button><button class="danger-button" data-action="toggle-banned">${row.banned ? "Unban user" : "Ban user"}</button></div></div>`;
+  }
   if (type === "report") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="soft-button" data-action="resolve-report">Resolve report</button><button class="soft-button" data-action="dismiss-report">Dismiss report</button></div></div>`;
   return `<div class="panel"><h2>Admin actions</h2><p class="muted">No safe write actions are enabled for this record until the production app schema is confirmed.</p></div>`;
 }
@@ -528,16 +650,21 @@ function bindActions(type, row) {
   document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => confirmAction(button.dataset.action, type, row)));
 }
 function confirmAction(action, type, row) {
+  const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
+  if (action === "deny-verification" && !reviewMessage) {
+    window.alert("Please provide a reason before requesting changes.");
+    return;
+  }
   const labels = {
     "toggle-area": row.active === false ? "activate this area" : "deactivate this area",
-    "approve-verification": "approve this user's verification",
-    "deny-verification": "deny this user's verification",
+    "approve-verification": "approve this SayVah account",
+    "deny-verification": "request changes for this SayVah account",
     "toggle-hidden": row.hidden ? "unhide this user" : "hide this user",
     "toggle-banned": row.banned ? "unban this user" : "ban this user",
     "resolve-report": "mark this report resolved",
     "dismiss-report": "dismiss this report"
   };
-  el.confirmCopy.textContent = `Please confirm you want to ${labels[action]}: ${detailTitle(type, row)}. This will create an admin audit log.`;
+  el.confirmCopy.textContent = action === "approve-verification" ? "Approve this SayVah account?" : `Please confirm you want to ${labels[action]}: ${detailTitle(type, row)}. This will create an admin audit log.`;
   el.confirmModal.hidden = false;
   el.confirmSubmit.onclick = () => runAction(action, type, row);
 }
@@ -547,8 +674,8 @@ async function runAction(action, type, row) {
   const refs = { user: COLLECTIONS.users, area: COLLECTIONS.locations, report: COLLECTIONS.reports };
   const updates = {
     "toggle-area": { active: row.active === false },
-    "approve-verification": { isVerified: true, isApproved: true, verificationStatus: "approved", verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid, verificationReviewMessage: reviewMessage },
-    "deny-verification": { isVerified: false, isApproved: false, verificationStatus: "denied", verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid, verificationReviewMessage: reviewMessage },
+    "approve-verification": { isVerified: true, verificationStatus: "verified", verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid, verificationReviewMessage: "" },
+    "deny-verification": { isVerified: false, verificationStatus: "changes_requested", verificationReviewMessage: reviewMessage, verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid },
     "toggle-hidden": { hidden: !row.hidden },
     "toggle-banned": { banned: !row.banned },
     "resolve-report": { status: "resolved", resolvedAt: serverTimestamp(), resolvedBy: state.user.uid },
@@ -594,7 +721,7 @@ function bindCopyEmail() {
   }));
 }
 function auditName(action, row) {
-  const map = { "approve-verification": "verification_approved", "deny-verification": "verification_denied", "resolve-report": "report_resolved", "dismiss-report": "report_dismissed" };
+  const map = { "approve-verification": "verification_approved", "deny-verification": "verification_changes_requested", "resolve-report": "report_resolved", "dismiss-report": "report_dismissed" };
   if (action === "toggle-area") return row.active === false ? "area_activated" : "area_deactivated";
   if (action === "toggle-hidden") return row.hidden ? "user_unhidden" : "user_hidden";
   if (action === "toggle-banned") return row.banned ? "user_unbanned" : "user_banned";
@@ -602,7 +729,18 @@ function auditName(action, row) {
 }
 function detailSection(title, fields) { return `<section class="panel"><h2>${escapeHtml(title)}</h2><dl>${Object.entries(fields).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl></section>`; }
 function evidenceFor(u) { const fields = ["idDocumentUrl","idDocumentURL","identityDocumentUrl","verificationDocumentUrl","verificationImageUrl","selfieUrl","proofUrl","documentUrl","idDocumentPath","identityDocumentPath","verificationDocumentPath","verificationImagePath","selfiePath","proofPath","documentPath","gurdwaraEvidenceUrl","organisationEvidenceUrl"]; return fields.filter((key) => u && u[key]).map((key) => ({ key, value: u[key] })); }
-function userDetailSections(u) { const evidence = evidenceFor(u); return detailSection("Identity", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: u.role || u.userType || u.accountType || "Not recorded", Area: areaOf(u), Phone: u.phoneNumber || u.phone || "Not recorded", Joined: formatDate(u.createdAt), Gurdwara: u.gurdwaraName || u.gurdwaraId || list(u.managedGurdwaraIds), Organisation: u.organisationName || u.organisationId || u.organizationName || u.organizationId || "Not recorded" }) + detailSection("Verification", { isVerified: String(u.isVerified ?? "Not recorded"), verificationStatus: u.verificationStatus || verificationState(u), isApproved: String(u.isApproved ?? "Not recorded"), verificationReviewMessage: u.verificationReviewMessage || "Not recorded", verificationReviewedAt: formatDate(u.verificationReviewedAt), verificationReviewedBy: u.verificationReviewedBy || "Not recorded" }) + `<section class="panel"><h2>ID / verification evidence</h2>${evidence.length ? evidence.map((item) => `<article class="record-card"><h3>${escapeHtml(item.key)}</h3><a class="soft-button" href="${escapeAttr(item.value)}" target="_blank" rel="noopener noreferrer">Open evidence</a></article>`).join("") : `<div class="empty">No ID verification document is currently stored for this user.</div>`}</section>` + detailSection("Community status", { Banned: String((u.banned || u.isBanned) ?? "Not recorded"), BanReason: u.banReason || "Not recorded", BanUntil: formatDate(u.banUntil), Hidden: String((u.hidden || u.isHidden) ?? "Not recorded"), HiddenReason: u.hiddenReason || "Not recorded", TempleAdmin: String(u.isTempleAdmin ?? "Not recorded"), ManagedGurdwaras: list(u.managedGurdwaraIds || u.managedGurdwaras) }); }
+function userDetailSections(u) {
+  const evidence = evidenceFor(u);
+  const photo = profileImageUrl(u);
+  const linkedIn = validLinkedInUrl(u.linkedinUrl);
+  return `<section class="panel profile-review"><h2>Profile picture</h2>${photo ? `<a class="profile-photo-button" href="${escapeAttr(photo)}" target="_blank" rel="noopener noreferrer"><img src="${escapeAttr(photo)}" alt="" /></a>` : `<div class="large-avatar">${escapeHtml(displayName(u).charAt(0).toUpperCase())}</div>`}</section>`
+    + detailSection("Identity", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: roleLabel(u), Area: areaOf(u), Joined: formatDate(u.createdAt) })
+    + (linkedIn ? `<section class="panel"><h2>LinkedIn</h2><a class="soft-button evidence-link" href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a></section>` : "")
+    + detailSection("Verification", { isVerified: String(u.isVerified ?? "Not recorded"), verificationStatus: verificationLabel(u), verificationRequestedAt: formatDate(u.verificationRequestedAt), verificationReviewedAt: formatDate(u.verificationReviewedAt), verificationReviewedBy: u.verificationReviewedBy || "Not recorded", verificationReviewMessage: u.verificationReviewMessage || "Not recorded" })
+    + profileChecklist(u)
+    + `<section class="panel"><h2>ID / verification evidence</h2>${evidence.length ? evidence.map((item) => `<article class="record-card"><h3>${escapeHtml(item.key)}</h3><a class="soft-button" href="${escapeAttr(item.value)}" target="_blank" rel="noopener noreferrer">Open evidence</a></article>`).join("") : `<div class="empty">No ID verification document is currently stored for this user.</div>`}</section>`
+    + detailSection("Community status", { Approved: String(u.isApproved ?? "Not recorded"), Banned: String((u.banned || u.isBanned) ?? "Not recorded"), Hidden: String((u.hidden || u.isHidden || u.isHiddenFromCommunity) ?? "Not recorded"), TempleAdmin: String(u.isTempleAdmin ?? "Not recorded"), AdminRole: u.role === "admin" ? "admin" : "Not recorded", ManagedGurdwaras: list(u.managedGurdwaraIds || u.managedGurdwaras) });
+}
 function flatten(row) {
   return Object.fromEntries(Object.entries(row).filter(([key]) => !String(key).toLowerCase().includes("fcmtoken")).map(([k, v]) => [k, valueText(v)]));
 }
@@ -641,11 +779,51 @@ function isBothRole(u) { return roleOf(u).includes("both") || (isSevadaar(u) && 
 function isVerifiedSevadaar(u) { return isSevadaar(u) && (u.isVerified === true || verificationState(u) === "verified" || verificationState(u) === "approved"); }
 function verificationState(u) {
   const raw = String(u.verificationStatus || "").toLowerCase();
-  if (u.isVerified === true || raw === "approved") return "verified";
+  if (u.isVerified === true || raw === "approved" || raw === "verified") return "verified";
   if (["pending", "pending_review", "review"].includes(raw)) return "pending";
-  if (["denied", "rejected"].includes(raw)) return "denied";
+  if (["denied", "rejected", "changes_requested", "changes required"].includes(raw)) return "changes_required";
   return "unverified";
 }
+
+function verificationSort(a, b) {
+  const stateA = verificationState(a);
+  const stateB = verificationState(b);
+  if (stateA === "pending" && stateB === "pending") return timestampMs(a.verificationRequestedAt) - timestampMs(b.verificationRequestedAt);
+  if (stateA === stateB) return timestampMs(b.verificationReviewedAt || b.verificationRequestedAt || b.createdAt) - timestampMs(a.verificationReviewedAt || a.verificationRequestedAt || a.createdAt);
+  return 0;
+}
+function verificationLabel(u) {
+  const value = verificationState(u);
+  if (value === "pending") return "Pending Review";
+  if (value === "verified") return "Verified";
+  if (value === "changes_required") return "Changes Required";
+  return "Unverified";
+}
+function profileChecklist(u) {
+  const items = [
+    ["Name", Boolean(displayName(u) && displayName(u) !== "Unknown user")],
+    ["Profile photo", Boolean(profileImageUrl(u))],
+    ["Area", Boolean(areaOf(u) && areaOf(u) !== "Not recorded")],
+    ["Role", Boolean(roleLabel(u) && roleLabel(u) !== "Not recorded")],
+    ["Profile complete", profileComplete(u)],
+    ["Admin verification", verificationState(u) === "verified"]
+  ];
+  return `<section class="panel"><h2>Profile completion</h2><ul class="checklist">${items.map(([label, ok]) => `<li class="${ok ? "ok" : "missing"}"><span>${ok ? "Yes" : "No"}</span>${escapeHtml(label)}</li>`).join("")}</ul></section>`;
+}
+function profileComplete(u) { return Boolean((u.isProfileComplete ?? u.profileComplete) || (displayName(u) !== "Unknown user" && profileImageUrl(u) && areaOf(u) !== "Not recorded" && roleLabel(u) !== "Not recorded")); }
+function roleLabel(u) { return u.role || u.roles || u.communityRole || u.userType || u.accountType || "Not recorded"; }
+function profileImageUrl(u) { return u.photoUrl || u.photoURL || u.profileImageUrl || u.profilePhotoUrl || u.imageUrl || ""; }
+function validLinkedInUrl(value) {
+  if (!value || typeof value !== "string") return "";
+  try {
+    const url = new URL(value.startsWith("http") ? value : `https://${value}`);
+    return /(^|\.)linkedin\.com$/i.test(url.hostname) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+function timestampMs(value) { const date = value?.toDate ? value.toDate() : value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0; }
+
 function statusGroup(status) {
   const value = String(status || "").toLowerCase();
   if (["open", "pending", "new"].includes(value)) return "open";
@@ -657,16 +835,17 @@ function statusGroup(status) {
 function areaOf(row) { return row.area || row.locationName || row.location || row.town || row.city || "Not recorded"; }
 function nameOrId(value) { return value || "Not recorded"; }
 function list(value) { return Array.isArray(value) ? value.join(", ") : (value && typeof value === "object" ? Object.keys(value).join(", ") : value || "Not recorded"); }
-function avatar(u) { return u.photoURL || u.photoUrl || u.profilePhotoUrl ? `<span class="avatar"><img src="${escapeAttr(u.photoURL || u.photoUrl || u.profilePhotoUrl)}" alt="" /></span>` : `<span class="avatar">${escapeHtml(displayName(u).charAt(0).toUpperCase())}</span>`; }
+function avatar(u) { const image = profileImageUrl(u); return image ? `<span class="avatar"><img src="${escapeAttr(image)}" alt="" /></span>` : `<span class="avatar">${escapeHtml(displayName(u).charAt(0).toUpperCase())}</span>`; }
 function statusPill(value) {
   const group = statusGroup(value);
-  const color = group === "completed" || group === "resolved" || group === "verified" || group === "approved" || value === true ? "green" : group === "closed" || group === "denied" || group === "banned" ? "red" : group === "active" || group === "pending" ? "orange" : "";
+  const normalized = String(value || "").toLowerCase();
+  const color = group === "completed" || group === "resolved" || group === "verified" || group === "approved" || value === true ? "green" : group === "closed" || group === "denied" || group === "changes_required" || group === "changes required" || group === "banned" ? "red" : group === "active" || group === "pending" || normalized.includes("pending") ? "orange" : "";
   return `<span class="status ${color}">${escapeHtml(value === undefined || value === null ? "unknown" : value)}</span>`;
 }
 function checkText(result) { return result.status === "fulfilled" ? `Allowed (${result.value.data().count} records)` : "Blocked or unavailable"; }
 function formatDate(value) {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
-  return date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date) : "Not recorded";
+  return date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/London" }).format(date).replace(",", " at") : "Not available";
 }
 function valueText(value) {
   if (value?.toDate) return formatDate(value);
@@ -675,9 +854,14 @@ function valueText(value) {
   return value === undefined || value === null || value === "" ? "Not recorded" : String(value);
 }
 function authError(error) {
-  if (error?.code === "auth/invalid-credential" || error?.code === "auth/wrong-password") return "Invalid email or password.";
-  if (error?.code === "auth/user-not-found") return "No admin account found for that email.";
-  return "Sign-in failed. Check the credentials and try again.";
+  if (error?.code === "auth/invalid-credential" || error?.code === "auth/wrong-password" || error?.code === "auth/user-not-found") return "Incorrect email or password.";
+  if (error?.code === "auth/user-disabled") return "This account has been disabled.";
+  if (error?.code === "auth/too-many-requests") return "Too many sign-in attempts. Please wait and try again.";
+  if (error?.code === "auth/network-request-failed") return "Unable to contact Firebase. Check your connection and try again.";
+  if (error?.code === "auth/unauthorized-domain") return "This domain is not authorised for SayVah admin authentication.";
+  if (error?.code === "permission-denied") return "Your account signed in successfully, but does not have permission to access the SayVah Admin Hub.";
+  if (error?.code === "auth-timeout" || error?.code === "profile-timeout") return "Sign-in is taking longer than expected. Please try again.";
+  return "Sign-in failed. Please try again.";
 }
 function escapeHtml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
 function escapeAttr(value) { return escapeHtml(value); }
