@@ -64,7 +64,7 @@ const navItems = [
   ["sevadaars", "Sevadaars", "V"],
   ["requesters", "Requesters", "R"],
   ["both", "Both Roles", "B"],
-  ["verification", "Account Verification", "K"],
+  ["verification", "Account Verification / Submissions", "K"],
   ["chats", "Chats", "✉"],
   ["reports", "Reports & Safety", "!"],
   ["areas", "Areas", "⌖"],
@@ -224,10 +224,17 @@ function bindChrome() {
 
 function renderNav() {
   const pending = state.verificationRows.filter((row) => verificationState(row) === "pending").length;
+  const groups = new Map([
+    ["users", "Users"],
+    ["chats", "Community / Safety"],
+    ["areas", "Management"],
+    ["system", "System"]
+  ]);
   el.nav.innerHTML = navItems.map(([id, label, icon]) => {
+    const heading = groups.has(id) ? `<span class="nav-section">${escapeHtml(groups.get(id))}</span>` : "";
     const badge = id === "verification" && pending ? `<strong class="nav-badge">${pending}</strong>` : "";
     const attention = id === "verification" && pending ? " has-pending" : "";
-    return `<button class="nav-item${attention}" data-page="${id}" type="button"><span>${icon}</span><span class="nav-label">${label}</span>${badge}</button>`;
+    return `${heading}<button class="nav-item${attention}" data-page="${id}" type="button"><span>${icon}</span><span class="nav-label">${label}</span>${badge}</button>`;
   }).join("");
   el.nav.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -367,12 +374,15 @@ function startVerificationListener() {
       renderNav();
       if (state.page === "verification") renderVerificationContent();
     },
-    (error) => console.error("Verification listener failed", error)
+    (error) => {
+      console.error("Unable to load verification submissions.", error);
+      if (state.page === "verification") setContent(`<section class="panel"><div class="error">Unable to load verification submissions.</div></section>`);
+    }
   );
 }
 
 function renderVerificationContent() {
-  const rows = [...state.verificationRows].sort(verificationSort);
+  const rows = state.verificationRows.filter(isVerificationRelevant).sort(verificationSort);
   const tab = state.filters.verification || "pending";
   const filtered = tab === "all" ? rows : rows.filter((row) => verificationState(row) === tab);
   const stats = [
@@ -384,9 +394,8 @@ function renderVerificationContent() {
     <div class="stats-grid verification-stats">${stats.map(([label, value]) => statCard(label, value)).join("")}</div>
     ${tabbar("verification", ["pending", "verified", "changes_required", "all"], tab)}
     <section class="panel">
-      <div class="panel-head"><h2>Account Verification</h2><span class="muted">${filtered.length} shown</span></div>
-      ${genericTable(filtered, ["User", "Area", "Status", "Submitted", "Reviewed"], verificationCells)}
-      ${cards(filtered, verificationCard)}
+      <div class="panel-head"><h2>Account Verification / Submissions</h2><span class="muted">${filtered.length} shown</span></div>
+      ${filtered.length ? genericTable(filtered, ["User", "Area", "Status", "Submitted", "Reviewed"], verificationCells) + cards(filtered, verificationCard) : `<div class="empty">${tab === "pending" ? "No pending verification submissions." : "No verification submissions found for this filter."}</div>`}
     </section>
   `);
   bindTabs("verification");
@@ -620,7 +629,7 @@ function bindRecordClicks(rows, type) {
 }
 function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(nameOrId(r.requesterName || r.requesterId || r.userId))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}</td>`; }
 function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(u.role || u.userType || u.accountType || "user")}</td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationState(u))}<br><span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span><br><span class="muted">Evidence: ${evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "none"}</span></td>`; }
-function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
+function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "No email")}</span><br><span class="muted">UID: ${escapeHtml(u.id)}</span><br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
 function chatCells(c) { return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`; }
 function reportCells(r) { return `<td>${escapeHtml(r.reason || r.type || r.id)}<br><span class="muted">${escapeHtml(r.description || "")}</span></td><td>${escapeHtml(nameOrId(r.reporterName || r.reporterId))}</td><td>${escapeHtml(nameOrId(r.reportedUserName || r.reportedUserId || r.userId))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt || r.timestamp)}</td>`; }
 function orgCells(o) { return `<td>${escapeHtml(o.name || o.title || o.id)}</td><td>${escapeHtml(areaOf(o) || o.location || "")}</td><td>${statusPill(o.active === false ? "inactive" : (o.status || "active"))}</td><td>${escapeHtml(list(o.admins || o.adminIds || o.managedBy))}</td><td>${formatDate(o.updatedAt || o.createdAt)}</td>`; }
@@ -628,7 +637,7 @@ function signupCells(s) { return `<td>${escapeHtml(s.name || "Not provided")}</t
 function qaCells(q) { return `<td>${escapeHtml(q.question || q.title || q.id)}</td><td>${escapeHtml(nameOrId(q.submitterName || q.userId || q.uid))}</td><td>${statusPill(q.status || (q.approved ? "approved" : "pending"))}</td><td>${escapeHtml(q.answer || q.response || "")}</td>`; }
 function requestCard(r) { return recordCard(r, requestTitle(r), { ID: r.id, Requester: nameOrId(r.requesterName || r.requesterId || r.userId), Area: areaOf(r), Status: r.status || "unknown", Created: formatDate(r.createdAt) }); }
 function userCard(u) { return recordCard(u, displayName(u), { UID: u.id, Email: u.email || "", Role: u.role || u.userType || u.accountType || "user", Area: areaOf(u), Verification: verificationState(u), Approved: u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded", Evidence: evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "No ID verification document is currently stored for this user.", Joined: formatDate(u.createdAt) }); }
-function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div>${statusPill(verificationLabel(u))}</div></article>`; }
+function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>${escapeHtml(u.email || "No email")}</p><p>UID: ${escapeHtml(u.id)}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div>${statusPill(verificationLabel(u))}</div></article>`; }
 function chatCard(c) { return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) }); }
 function reportCard(r) { return recordCard(r, r.reason || r.type || r.id, { Reporter: nameOrId(r.reporterName || r.reporterId), Reported: nameOrId(r.reportedUserName || r.reportedUserId || r.userId), Status: r.status || "unknown", Date: formatDate(r.createdAt || r.timestamp) }); }
 function orgCard(o) { return recordCard(o, o.name || o.title || o.id, { Area: areaOf(o) || o.location || "", Status: o.active === false ? "inactive" : (o.status || "active"), Admins: list(o.admins || o.adminIds || o.managedBy) }); }
@@ -650,7 +659,7 @@ function actionButtons(type, row) {
   if (type === "area") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="soft-button" data-action="toggle-area">${row.active === false ? "Activate area" : "Deactivate area"}</button></div></div>`;
   if (type === "user") {
     const verified = verificationState(row) === "verified";
-    return `<div class="panel"><h2>Admin actions</h2><div class="field"><label for="review-message">Required reason for denied / changes requested</label><textarea id="review-message">${escapeHtml(row.verificationReviewMessage || "")}</textarea></div><div class="action-row"><button class="primary-button" data-action="approve-verification" ${verified ? "disabled" : ""}>Approve</button><button class="danger-button" data-action="deny-verification">Deny / Request Changes</button><button class="danger-button" data-action="toggle-hidden">${row.hidden ? "Unhide user" : "Hide user"}</button><button class="danger-button" data-action="toggle-banned">${row.banned ? "Unban user" : "Ban user"}</button></div></div>`;
+    return `<div class="panel"><h2>Verification decision</h2><div id="action-message" class="form-message" aria-live="polite"></div><div class="field"><label for="review-message">Required reason for denied / changes requested</label><textarea id="review-message">${escapeHtml(row.verificationReviewMessage || "")}</textarea></div><div class="action-row"><button class="primary-button" data-action="approve-verification" ${verified ? "disabled" : ""}>Approve</button><button class="danger-button" data-action="deny-verification">Deny / Request Changes</button></div></div>`;
   }
   if (type === "report") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="soft-button" data-action="resolve-report">Resolve report</button><button class="soft-button" data-action="dismiss-report">Dismiss report</button></div></div>`;
   return `<div class="panel"><h2>Admin actions</h2><p class="muted">No safe write actions are enabled for this record until the production app schema is confirmed.</p></div>`;
@@ -661,7 +670,7 @@ function bindActions(type, row) {
 function confirmAction(action, type, row) {
   const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
   if (action === "deny-verification" && !reviewMessage) {
-    window.alert("Please provide a reason before requesting changes.");
+    showActionMessage("Please provide a review reason before requesting changes.");
     return;
   }
   const labels = {
@@ -690,20 +699,27 @@ async function runAction(action, type, row) {
     "resolve-report": { status: "resolved", resolvedAt: serverTimestamp(), resolvedBy: state.user.uid },
     "dismiss-report": { status: "dismissed", resolvedAt: serverTimestamp(), resolvedBy: state.user.uid }
   };
-  await updateDoc(doc(db, refs[type], row.id), updates[action]);
-  await addDoc(collection(db, COLLECTIONS.audit), {
+  try {
+    await updateDoc(doc(db, refs[type], row.id), updates[action]);
+    await addDoc(collection(db, COLLECTIONS.audit), {
     adminUid: state.user.uid,
     action: auditName(action, row),
     targetType: type,
     targetId: row.id,
     timestamp: serverTimestamp(),
-    summary: `${auditName(action, row)} on ${detailTitle(type, row)}`
-  });
-  state.cache.clear();
-  closeConfirm();
-  closeModal();
-  renderPage(state.page);
+      summary: `${auditName(action, row)} on ${detailTitle(type, row)}`
+    });
+    state.cache.clear();
+    closeConfirm();
+    closeModal();
+    renderPage(state.page);
+  } catch (error) {
+    console.error(action === "approve-verification" ? "Approval failed." : "Unable to request changes.", error);
+    closeConfirm();
+    showActionMessage(action === "approve-verification" ? "Approval failed." : "Unable to request changes.");
+  }
 }
+function showActionMessage(message) { const node = document.getElementById("action-message"); if (node) node.textContent = message; }
 async function appendChatMessages(chatId) {
   const shell = el.modalContent.querySelector(".detail-grid");
   if (!shell) return;
@@ -742,13 +758,23 @@ function userDetailSections(u) {
   const evidence = evidenceFor(u);
   const photo = profileImageUrl(u);
   const linkedIn = validLinkedInUrl(u.linkedinUrl);
-  return `<section class="panel profile-review"><h2>Profile picture</h2>${photo ? `<a class="profile-photo-button" href="${escapeAttr(photo)}" target="_blank" rel="noopener noreferrer"><img src="${escapeAttr(photo)}" alt="" /></a>` : `<div class="large-avatar">${escapeHtml(displayName(u).charAt(0).toUpperCase())}</div>`}</section>`
-    + detailSection("Identity", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: roleLabel(u), Area: areaOf(u), Joined: formatDate(u.createdAt) })
-    + (linkedIn ? `<section class="panel"><h2>LinkedIn</h2><a class="soft-button evidence-link" href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a></section>` : "")
+  return statusWarnings(u)
+    + `<section class="panel profile-review"><h2>Profile picture</h2>${photo ? `<a class="profile-photo-button" href="${escapeAttr(photo)}" target="_blank" rel="noopener noreferrer"><img src="${escapeAttr(photo)}" alt="" /></a>` : `<div class="empty">Profile picture missing</div>`}</section>`
+    + detailSection("Profile", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: roleLabel(u), Area: areaOf(u), LocationId: u.locationId || "Not recorded", LinkedIn: linkedIn ? "Provided" : "Not provided", Joined: formatDate(u.createdAt) })
+    + `<section class="panel"><h2>LinkedIn</h2>${linkedIn ? `<a class="soft-button evidence-link" href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a>` : `<div class="empty">Not provided</div>`}</section>`
     + detailSection("Verification", { isVerified: String(u.isVerified ?? "Not recorded"), verificationStatus: verificationLabel(u), verificationRequestedAt: formatDate(u.verificationRequestedAt), verificationReviewedAt: formatDate(u.verificationReviewedAt), verificationReviewedBy: u.verificationReviewedBy || "Not recorded", verificationReviewMessage: u.verificationReviewMessage || "Not recorded" })
     + profileChecklist(u)
     + `<section class="panel"><h2>ID / verification evidence</h2>${evidence.length ? evidence.map((item) => `<article class="record-card"><h3>${escapeHtml(item.key)}</h3><a class="soft-button" href="${escapeAttr(item.value)}" target="_blank" rel="noopener noreferrer">Open evidence</a></article>`).join("") : `<div class="empty">No ID verification document is currently stored for this user.</div>`}</section>`
-    + detailSection("Community status", { Approved: String(u.isApproved ?? "Not recorded"), Banned: String((u.banned || u.isBanned) ?? "Not recorded"), Hidden: String((u.hidden || u.isHidden || u.isHiddenFromCommunity) ?? "Not recorded"), TempleAdmin: String(u.isTempleAdmin ?? "Not recorded"), AdminRole: u.role === "admin" ? "admin" : "Not recorded", ManagedGurdwaras: list(u.managedGurdwaraIds || u.managedGurdwaras) });
+    + detailSection("Community / safety status", { isApproved: String(u.isApproved ?? "Not recorded"), Banned: String(isBanned(u)), Hidden: String(isHidden(u)), TempleAdmin: String(u.isTempleAdmin ?? "Not recorded"), AdminRole: u.role === "admin" ? "admin" : "Not recorded", Gurdwara: u.gurdwaraName || u.gurdwaraId || list(u.managedGurdwaraIds), Organisation: u.organisationName || u.organisationId || u.organizationName || u.organizationId || "Not recorded" });
+}
+function statusWarnings(u) {
+  const warnings = [];
+  if (u.isApproved === false) warnings.push("Account is not approved.");
+  if (isBanned(u)) warnings.push("Account is banned.");
+  if (isHidden(u)) warnings.push("Account is hidden from the community.");
+  if (u.role === "admin") warnings.push("This account has admin role.");
+  if (u.isTempleAdmin === true) warnings.push("This account has Temple Admin status.");
+  return warnings.length ? `<section class="panel warning-panel"><h2>Status warnings</h2>${warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("")}</section>` : "";
 }
 function flatten(row) {
   return Object.fromEntries(Object.entries(row).filter(([key]) => !String(key).toLowerCase().includes("fcmtoken")).map(([k, v]) => [k, valueText(v)]));
@@ -758,9 +784,9 @@ function filterUser(row, filters, sevadaarsOnly) {
   if (filters.search && !text.includes(filters.search.toLowerCase())) return false;
   if (filters.role && row.role !== filters.role) return false;
   if (filters.verification && verificationState(row) !== filters.verification) return false;
-  if (filters.state === "hidden" && !row.hidden) return false;
-  if (filters.state === "banned" && !row.banned) return false;
-  if (filters.state === "active" && (row.hidden || row.banned)) return false;
+  if (filters.state === "hidden" && !isHidden(row)) return false;
+  if (filters.state === "banned" && !isBanned(row)) return false;
+  if (filters.state === "active" && (isHidden(row) || isBanned(row))) return false;
   if (sevadaarsOnly && filters.quick && filters.quick !== "all") {
     if (["hidden", "banned"].includes(filters.quick)) return Boolean(row[filters.quick]);
     return verificationState(row) === filters.quick;
@@ -776,7 +802,7 @@ function filterChats(rows) {
   if (tab === "archived") return rows.filter((c) => c.archived === true || c.status === "archived");
   return rows;
 }
-function displayName(u = {}) { return u.displayName || u.name || u.fullName || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || u.id || "Unknown user"; }
+function displayName(u = {}) { return u.fullName || u.name || u.displayName || u.username || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || u.id || "Unknown user"; }
 function requestTitle(r = {}) { return r.title || r.requestTitle || r.category || r.id || "Untitled request"; }
 function reportTitle(r = {}) { return r.reason || r.type || r.id || "Report"; }
 function signupTitle(s = {}) { return `${s.name || "Signup"}${s.area ? `, ${s.area}` : ""}`; }
@@ -785,14 +811,15 @@ function roleOf(u) { return String(u.role || u.userType || u.accountType || "").
 function isSevadaar(u) { const role = roleOf(u); return role.includes("sevadaar") || role.includes("helper") || role.includes("volunteer") || role.includes("both") || u.isSevadaar === true || u.canHelp === true; }
 function isRequester(u) { const role = roleOf(u); return role.includes("requester") || role.includes("support") || role.includes("both") || u.isRequester === true || u.canRequest === true; }
 function isBothRole(u) { return roleOf(u).includes("both") || (isSevadaar(u) && isRequester(u)); }
-function isVerifiedSevadaar(u) { return isSevadaar(u) && (u.isVerified === true || verificationState(u) === "verified" || verificationState(u) === "approved"); }
+function isVerifiedSevadaar(u) { return isSevadaar(u) && verificationState(u) === "verified"; }
 function verificationState(u) {
   const raw = String(u.verificationStatus || "").toLowerCase();
-  if (u.isVerified === true || raw === "approved" || raw === "verified") return "verified";
-  if (["pending", "pending_review", "review"].includes(raw)) return "pending";
-  if (["denied", "rejected", "changes_requested", "changes required"].includes(raw)) return "changes_required";
+  if (u.isVerified === true || raw === "verified") return "verified";
+  if (raw === "pending_review") return "pending";
+  if (raw === "changes_requested") return "changes_required";
   return "unverified";
 }
+function isVerificationRelevant(u) { return ["pending", "verified", "changes_required"].includes(verificationState(u)); }
 
 function verificationSort(a, b) {
   const stateA = verificationState(a);
@@ -810,18 +837,23 @@ function verificationLabel(u) {
 }
 function profileChecklist(u) {
   const items = [
-    ["Name", Boolean(displayName(u) && displayName(u) !== "Unknown user")],
-    ["Profile photo", Boolean(profileImageUrl(u))],
-    ["Area", Boolean(areaOf(u) && areaOf(u) !== "Not recorded")],
-    ["Role", Boolean(roleLabel(u) && roleLabel(u) !== "Not recorded")],
-    ["Profile complete", profileComplete(u)],
-    ["Admin verification", verificationState(u) === "verified"]
+    ["Full name", hasName(u)],
+    ["Profile picture", Boolean(profileImageUrl(u))],
+    ["Area", hasArea(u)],
+    ["Role", hasRole(u)],
+    ["LinkedIn optional", true],
+    ["Overall profile completeness", profileComplete(u)]
   ];
   return `<section class="panel"><h2>Profile completion</h2><ul class="checklist">${items.map(([label, ok]) => `<li class="${ok ? "ok" : "missing"}"><span>${ok ? "Yes" : "No"}</span>${escapeHtml(label)}</li>`).join("")}</ul></section>`;
 }
-function profileComplete(u) { return Boolean((u.isProfileComplete ?? u.profileComplete) || (displayName(u) !== "Unknown user" && profileImageUrl(u) && areaOf(u) !== "Not recorded" && roleLabel(u) !== "Not recorded")); }
-function roleLabel(u) { return u.role || u.roles || u.communityRole || u.userType || u.accountType || "Not recorded"; }
-function profileImageUrl(u) { return u.photoUrl || u.photoURL || u.profileImageUrl || u.profilePhotoUrl || u.imageUrl || ""; }
+function profileComplete(u) { return Boolean((u.isProfileComplete ?? u.profileComplete) || (hasName(u) && profileImageUrl(u) && hasArea(u) && hasRole(u))); }
+function hasName(u) { return Boolean(displayName(u) && displayName(u) !== "Unknown user"); }
+function hasArea(u) { return Boolean(areaOf(u) && areaOf(u) !== "Not recorded"); }
+function hasRole(u) { return Boolean(roleLabel(u) && roleLabel(u) !== "Not recorded"); }
+function roleLabel(u) { return list(u.roles) !== "Not recorded" ? list(u.roles) : (u.role || u.communityRole || u.userType || u.accountType || (u.isSevadaar && u.isRequester ? "both" : u.isSevadaar ? "sevadaar" : u.isRequester ? "requester" : "Not recorded")); }
+function profileImageUrl(u) { return u.photoUrl || u.photoURL || u.profileImageUrl || u.profilePhotoUrl || u.imageUrl || u.avatarUrl || ""; }
+function isBanned(u) { return Boolean(u.isBanned || u.banned); }
+function isHidden(u) { return Boolean(u.isHiddenFromCommunity || u.isHidden || u.hidden); }
 function validLinkedInUrl(value) {
   if (!value || typeof value !== "string") return "";
   try {
@@ -841,7 +873,7 @@ function statusGroup(status) {
   if (["cancelled", "canceled", "closed", "dismissed", "inactive"].includes(value)) return "closed";
   return value || "open";
 }
-function areaOf(row) { return row.area || row.locationName || row.location || row.town || row.city || "Not recorded"; }
+function areaOf(row) { return row.area || row.locationName || row.location || row.locationId || row.town || row.city || "Not recorded"; }
 function nameOrId(value) { return value || "Not recorded"; }
 function list(value) { return Array.isArray(value) ? value.join(", ") : (value && typeof value === "object" ? Object.keys(value).join(", ") : value || "Not recorded"); }
 function avatar(u) { const image = profileImageUrl(u); return image ? `<span class="avatar"><img src="${escapeAttr(image)}" alt="" /></span>` : `<span class="avatar">${escapeHtml(displayName(u).charAt(0).toUpperCase())}</span>`; }

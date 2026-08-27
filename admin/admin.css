@@ -249,6 +249,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .nav-item.has-pending:not(.active) { border-color: rgba(245,160,0,.34); background: rgba(245,160,0,.08); }
 .nav-item.has-pending:not(.active) .nav-badge { box-shadow: 0 0 0 0 rgba(245,160,0,.34); animation: badge-pulse 2.4s ease-in-out infinite; }
 @keyframes badge-pulse { 50% { box-shadow: 0 0 0 7px rgba(245,160,0,0); } }
+@media (prefers-reduced-motion: reduce) { .nav-item.has-pending:not(.active) .nav-badge { animation: none; } }
 .primary-button:disabled, .secondary-button:disabled, .danger-button:disabled, .soft-button:disabled { opacity: .48; cursor: not-allowed; }
 .verification-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .verification-card { cursor: pointer; }
@@ -270,3 +271,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
   .verification-summary { grid-template-columns: 44px minmax(0, 1fr); }
   .verification-summary .status { grid-column: 1 / -1; justify-self: start; }
 }
+
+.warning-panel { border-color: rgba(245,160,0,.36); background: rgba(245,160,0,.08); }
+.warning-panel p { margin: 8px 0 0; color: #ffd47a; }
