@@ -79,8 +79,11 @@ button { cursor: pointer; }
 .danger-button { color: #fff; background: rgba(255,102,93,.16); border-color: rgba(255,102,93,.42); }
 .form-message { min-height: 22px; color: #ffb0a6; font-size: 14px; }
 .denied-panel { margin-top: 24px; padding: 18px; border: 1px solid rgba(255,102,93,.35); border-radius: 18px; background: rgba(255,102,93,.08); }
-.admin-app { min-height: 100vh; display: grid; grid-template-columns: 286px minmax(0, 1fr); background: linear-gradient(180deg, #040b14, var(--bg)); }
+.admin-app { min-height: 100vh; display: grid; grid-template-columns: 270px minmax(0, 1fr); background: linear-gradient(180deg, #040b14, var(--bg)); }
+.drawer-backdrop { display: none; }
 .sidebar {
+  grid-column: 1;
+  grid-row: 1;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -109,7 +112,7 @@ button { cursor: pointer; }
 .nav-item.active { color: #06111f; background: var(--cyan); font-weight: 800; }
 .sidebar-user { margin-top: auto; display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
 .sidebar-user button { color: #ffd47a; background: rgba(245,160,0,.1); border: 1px solid rgba(245,160,0,.32); border-radius: 12px; min-height: 40px; }
-.main-shell { min-width: 0; }
+.main-shell { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
 .topbar {
   position: sticky;
   top: 0;
@@ -203,8 +206,9 @@ dd { margin: 0; overflow-wrap: anywhere; }
 }
 @media (max-width: 820px) {
   .admin-app { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; z-index: 60; width: min(310px, 86vw); transform: translateX(-105%); transition: transform .2s ease; }
+  .sidebar { grid-column: 1; position: fixed; z-index: 60; width: min(310px, 86vw); transform: translateX(-105%); transition: transform .2s ease; }
   .sidebar.open { transform: translateX(0); }
+  .main-shell { grid-column: 1; }
   .drawer-backdrop { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); }
   .drawer-backdrop.open { display: block; }
   .icon-button { display: grid; place-items: center; }
