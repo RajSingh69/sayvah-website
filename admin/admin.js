@@ -82,9 +82,7 @@ const state = {
   cache: new Map(),
   filters: {},
   verificationRows: [],
-  verificationUnsubscribe: null,
-  authHandlingUid: null,
-  authHandlingPromise: null
+  verificationUnsubscribe: null
 };
 
 const el = {
@@ -111,7 +109,11 @@ const el = {
   confirmSubmit: document.getElementById("confirm-submit")
 };
 
-await setPersistence(auth, browserLocalPersistence);
+try {
+  await setPersistence(auth, browserLocalPersistence);
+} catch (error) {
+  console.error("SayVah admin persistence setup failed; continuing with default auth persistence.", error);
+}
 renderNav();
 bindChrome();
 
@@ -120,7 +122,7 @@ onAuthStateChanged(auth, async (user) => {
     resetAdminState();
     return showLogin();
   }
-  await handleAuthenticatedUser(user, { source: "restored-session" });
+  await handleAuthenticatedUser(user);
 });
 
 el.loginForm.addEventListener("submit", async (event) => {
@@ -133,35 +135,25 @@ el.loginForm.addEventListener("submit", async (event) => {
       signInWithEmailAndPassword(auth, String(form.get("email")).trim(), String(form.get("password"))),
       "auth-timeout"
     );
-    console.info("SayVah admin authentication succeeded.", { uid: credential.user.uid });
-    await handleAuthenticatedUser(credential.user, { source: "login-submit" });
+    console.log("AUTH SUCCESS", { uid: credential.user.uid });
+    showAuthMessage("Checking admin access...", "");
   } catch (error) {
     console.error("SayVah admin sign-in failed", error);
     resetAdminState();
     showLogin();
     showAuthMessage(authError(error), "error");
   } finally {
-    if (el.adminApp.hidden) setLoginLoading(false);
+    if (el.adminApp.hidden && !auth.currentUser) setLoginLoading(false);
   }
 });
 
-async function handleAuthenticatedUser(user, options = {}) {
-  if (state.authHandlingPromise && state.authHandlingUid === user.uid) return state.authHandlingPromise;
-  state.authHandlingUid = user.uid;
-  state.authHandlingPromise = handleAuthenticatedUserCore(user, options).finally(() => {
-    state.authHandlingUid = null;
-    state.authHandlingPromise = null;
-  });
-  return state.authHandlingPromise;
-}
-
-async function handleAuthenticatedUserCore(user, options = {}) {
+async function handleAuthenticatedUser(user) {
   state.user = user;
   state.adminProfile = null;
   state.cache.clear();
   showAuthMessage("Checking admin access...", "");
   try {
-    console.info("SayVah admin profile lookup started.", { uid: user.uid, source: options.source || "unknown" });
+    console.log("ADMIN PROFILE LOOKUP STARTED", { uid: user.uid });
     const profileSnap = await withTimeout(getDoc(doc(db, COLLECTIONS.users, user.uid)), "profile-timeout");
     if (!profileSnap.exists()) {
       console.error("SayVah admin profile not found.", { uid: user.uid });
@@ -171,7 +163,7 @@ async function handleAuthenticatedUserCore(user, options = {}) {
     }
 
     const profile = { id: profileSnap.id, ...profileSnap.data() };
-    console.info("SayVah admin profile found.", { uid: user.uid, role: profile.role || "not-set" });
+    console.log("ADMIN PROFILE FOUND", { uid: user.uid, role: profile.role || "not-set" });
     if (profile.role !== "admin") {
       console.error("SayVah admin role denied.", { uid: user.uid, role: profile.role || "not-set" });
       await signOut(auth).catch((error) => console.error("SayVah admin sign-out after role denial failed", error));
@@ -179,9 +171,10 @@ async function handleAuthenticatedUserCore(user, options = {}) {
       return;
     }
 
-    console.info("SayVah admin role accepted.", { uid: user.uid });
+    console.log("ADMIN ROLE ACCEPTED", { uid: user.uid });
     state.adminProfile = profile;
     showAdmin();
+    console.log("ADMIN HUB SHOWN", { uid: user.uid });
     console.info("SayVah admin dashboard initialisation started.");
     renderPage(state.page)
       .then(() => console.info("SayVah admin dashboard initialisation completed."))
@@ -191,6 +184,7 @@ async function handleAuthenticatedUserCore(user, options = {}) {
       });
   } catch (error) {
     console.error("SayVah admin verification failed", error);
+    await signOut(auth).catch((signOutError) => console.error("SayVah admin sign-out after verification failure failed", signOutError));
     resetAdminState();
     showLogin();
     showAuthMessage(authError(error), "error");
@@ -215,8 +209,6 @@ function resetAdminState() {
   state.user = null;
   state.adminProfile = null;
   state.cache.clear();
-  state.authHandlingUid = null;
-  state.authHandlingPromise = null;
   stopVerificationListener();
 }
 
@@ -560,7 +552,13 @@ function showAdmin() {
   el.authView.hidden = true;
   el.adminApp.hidden = false;
   el.signedInAs.textContent = `Signed in as ${displayName(state.adminProfile) || state.user.email}`;
-  startVerificationListener();
+  window.setTimeout(() => {
+    try {
+      startVerificationListener();
+    } catch (error) {
+      console.error("Verification listener startup failed", error);
+    }
+  }, 0);
 }
 function showAuthMessage(message) { el.authMessage.textContent = message; }
 function setContent(html) { el.content.innerHTML = html; }
@@ -859,7 +857,7 @@ function authError(error) {
   if (error?.code === "auth/too-many-requests") return "Too many sign-in attempts. Please wait and try again.";
   if (error?.code === "auth/network-request-failed") return "Unable to contact Firebase. Check your connection and try again.";
   if (error?.code === "auth/unauthorized-domain") return "This domain is not authorised for SayVah admin authentication.";
-  if (error?.code === "permission-denied") return "Your account signed in successfully, but does not have permission to access the SayVah Admin Hub.";
+  if (error?.code === "permission-denied") return "Signed in successfully, but Firestore blocked access to your admin profile.";
   if (error?.code === "auth-timeout" || error?.code === "profile-timeout") return "Sign-in is taking longer than expected. Please try again.";
   return "Sign-in failed. Please try again.";
 }
