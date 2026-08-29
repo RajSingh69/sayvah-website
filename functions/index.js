@@ -112,75 +112,351 @@ exports.sendLaunchSignupNotification = onDocumentCreated(
 exports.preparePermanentUserDeletion = onCall(
   { region: "europe-west2" },
   async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "Authentication required.");
+    const { callerUid, targetUid, targetSnap, targetData } = await validateDeletionRequest(request, { allowAdminDeletion: true });
+    const dependencySummary = await collectUserDependencies(targetUid, targetData);
 
-    const callerSnap = await admin.firestore().collection("users").doc(callerUid).get();
-    if (!callerSnap.exists || (callerSnap.data() || {}).role !== "admin") {
-      throw new HttpsError("permission-denied", "SayVah admin role required.");
-    }
-
-    const targetUid = stringValue(request.data && request.data.uid);
-    const confirmation = stringValue(request.data && request.data.confirmation);
-    if (!targetUid) throw new HttpsError("invalid-argument", "Target UID is required.");
-    if (targetUid === callerUid) throw new HttpsError("failed-precondition", "Admins cannot delete their own account.");
-    if (confirmation !== "DELETE") throw new HttpsError("failed-precondition", "Typed DELETE confirmation is required.");
-
-    const targetRef = admin.firestore().collection("users").doc(targetUid);
-    const targetSnap = await targetRef.get();
-    if (!targetSnap.exists) throw new HttpsError("not-found", "Target user does not exist.");
-
-    const linkedRecords = await linkedUserRecordCounts(targetUid);
-    const hasLinkedRecords = Object.values(linkedRecords).some((count) => count > 0);
     await admin.firestore().collection("adminAuditLogs").add({
       adminUid: callerUid,
       action: "user_delete_preflight",
       targetType: "user",
       targetId: targetUid,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      summary: hasLinkedRecords ? "Permanent user deletion blocked by linked SayVah records." : "Permanent user deletion preflight completed; deletion service still requires final cleanup policy.",
-      linkedRecords
+      summary: "Permanent user deletion preflight completed.",
+      targetDisplayName: safeDisplayName(targetData, targetUid),
+      targetEmail: stringValue(targetData.email),
+      targetRole: stringValue(targetData.role),
+      dependencySummary: dependencySummary.counts
     });
 
-    throw new HttpsError(
-      "failed-precondition",
-      hasLinkedRecords
-        ? "Permanent deletion requires dependency-aware cleanup for linked SayVah records."
-        : "Permanent deletion service is prepared but final Auth/Storage cleanup policy is not enabled."
-    );
+    return {
+      target: safeTargetSnapshot(targetUid, targetData, targetSnap.exists),
+      dependencySummary: dependencySummary.counts,
+      warnings: dependencySummary.warnings,
+      requiresAdminDeletionConfirmation: targetData.role === "admin"
+    };
   }
 );
+
+exports.deleteUserPermanently = onCall(
+  { region: "europe-west2" },
+  async (request) => {
+    const confirmation = stringValue(request.data && request.data.confirmation);
+    const secondConfirmation = request.data && request.data.secondConfirmation === true;
+    if (confirmation !== "DELETE") throw new HttpsError("failed-precondition", "Typed DELETE confirmation is required.");
+    if (!secondConfirmation) throw new HttpsError("failed-precondition", "Second deletion confirmation is required.");
+
+    const allowAdminDeletion = request.data && request.data.allowAdminDeletion === true;
+    const { callerUid, targetUid, targetSnap, targetData } = await validateDeletionRequest(request, { allowAdminDeletion });
+    const deletionStats = emptyDeletionStats();
+    let authDeleted = false;
+    let profileDeleted = false;
+    let storageDeleted = false;
+    const partialFailures = [];
+
+    await admin.firestore().collection("adminAuditLogs").add({
+      adminUid: callerUid,
+      action: "user_delete_started",
+      targetType: "user",
+      targetId: targetUid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      summary: "Permanent user deletion started.",
+      targetDisplayName: safeDisplayName(targetData, targetUid),
+      targetEmail: stringValue(targetData.email),
+      targetRole: stringValue(targetData.role)
+    });
+
+    await runCleanupStep(partialFailures, "requests", async () => handleUserRequests(targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "help_connections", async () => deleteQueryMatches("help_connections", ["requesterId", "helperId", "userId"], targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "sessions", async () => deleteQueryMatches("sessions", ["userId", "uid"], targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "location_sessions", async () => deleteQueryMatches("location_sessions", ["userId", "uid"], targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "ratings", async () => anonymiseQueryMatches("ratings", ["fromUserId", "toUserId", "userId"], targetUid, deletionStats, { fromUserName: "Deleted User", toUserName: "Deleted User", userName: "Deleted User" }));
+    await runCleanupStep(partialFailures, "reports", async () => anonymiseQueryMatches("reports", ["reporterId", "reportedUserId", "userId"], targetUid, deletionStats, { reporterName: "Deleted User", reportedUserName: "Deleted User", userName: "Deleted User" }));
+    await runCleanupStep(partialFailures, "chats", async () => handleUserChats(targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "messages", async () => anonymiseMessages(targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "gurdwaras", async () => removeArrayReferences("gurdwaras", ["admins", "adminIds", "managedBy", "managerIds"], targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "organisations", async () => removeArrayReferences("organisations", ["admins", "adminIds", "managedBy", "managerIds"], targetUid, deletionStats));
+    await runCleanupStep(partialFailures, "storage", async () => { storageDeleted = await deleteOwnedStorage(targetUid, targetData); });
+
+    await runCleanupStep(partialFailures, "auth", async () => {
+      try {
+        await admin.auth().deleteUser(targetUid);
+        authDeleted = true;
+      } catch (error) {
+        if (error.code === "auth/user-not-found") authDeleted = true;
+        else throw error;
+      }
+    });
+
+    if (authDeleted && targetSnap.exists) {
+      await runCleanupStep(partialFailures, "users", async () => {
+        await admin.firestore().collection("users").doc(targetUid).delete();
+        deletionStats.recordsDeleted += 1;
+        profileDeleted = true;
+      });
+    } else if (!targetSnap.exists) {
+      profileDeleted = true;
+    }
+
+    await admin.firestore().collection("adminAuditLogs").add({
+      adminUid: callerUid,
+      action: partialFailures.length ? "user_delete_attention_required" : "user_permanently_deleted",
+      targetType: "user",
+      targetId: targetUid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      summary: partialFailures.length ? "Permanent user deletion requires attention." : "User permanently deleted.",
+      targetDisplayName: safeDisplayName(targetData, targetUid),
+      targetEmail: stringValue(targetData.email),
+      targetRole: stringValue(targetData.role),
+      authDeleted,
+      profileDeleted,
+      storageDeleted,
+      recordsDeleted: deletionStats.recordsDeleted,
+      recordsAnonymised: deletionStats.recordsAnonymised,
+      recordsPreserved: deletionStats.recordsPreserved,
+      partialFailures: partialFailures.map((failure) => failure.step)
+    });
+
+    if (partialFailures.length) {
+      throw new HttpsError("internal", "User deletion requires attention.", {
+        authDeleted,
+        profileDeleted,
+        storageDeleted,
+        recordsDeleted: deletionStats.recordsDeleted,
+        recordsAnonymised: deletionStats.recordsAnonymised,
+        recordsPreserved: deletionStats.recordsPreserved,
+        partialFailures: partialFailures.map((failure) => ({ step: failure.step, message: failure.message }))
+      });
+    }
+
+    return {
+      authDeleted,
+      profileDeleted,
+      storageDeleted,
+      recordsDeleted: deletionStats.recordsDeleted,
+      recordsAnonymised: deletionStats.recordsAnonymised,
+      recordsPreserved: deletionStats.recordsPreserved
+    };
+  }
+);
+
+async function validateDeletionRequest(request, options = {}) {
+  const callerUid = request.auth && request.auth.uid;
+  if (!callerUid) throw new HttpsError("unauthenticated", "Authentication required.");
+
+  const callerSnap = await admin.firestore().collection("users").doc(callerUid).get();
+  if (!callerSnap.exists || (callerSnap.data() || {}).role !== "admin") {
+    throw new HttpsError("permission-denied", "SayVah admin role required.");
+  }
+
+  const targetUid = stringValue(request.data && request.data.uid);
+  if (!targetUid) throw new HttpsError("invalid-argument", "Target UID is required.");
+  if (targetUid === callerUid) throw new HttpsError("failed-precondition", "Admins cannot delete their own account.");
+
+  const targetSnap = await admin.firestore().collection("users").doc(targetUid).get();
+  const targetData = targetSnap.exists ? targetSnap.data() || {} : {};
+  if (!targetSnap.exists && options.requireExisting !== false) throw new HttpsError("not-found", "Target user does not exist.");
+
+  if (isProtectedAdmin(targetData)) throw new HttpsError("failed-precondition", "Protected admin accounts cannot be deleted.");
+  if (targetData.role === "admin") {
+    const adminCountSnap = await admin.firestore().collection("users").where("role", "==", "admin").count().get();
+    if ((adminCountSnap.data().count || 0) <= 1) throw new HttpsError("failed-precondition", "Cannot delete the last admin account.");
+    if (!options.allowAdminDeletion && !(request.data && request.data.allowAdminDeletion === true)) {
+      throw new HttpsError("failed-precondition", "Deleting another admin requires explicit admin deletion confirmation.");
+    }
+  }
+
+  return { callerUid, targetUid, callerData: callerSnap.data() || {}, targetSnap, targetData };
+}
+
+function isProtectedAdmin(user) {
+  return user.superAdmin === true || user.isSuperAdmin === true || user.protectedAdmin === true || user.deletionProtected === true;
+}
+
+async function collectUserDependencies(uid, user = {}) {
+  const counts = await linkedUserRecordCounts(uid);
+  counts["users.profile"] = user && Object.keys(user).length ? 1 : 0;
+  counts["storage.ownedProfileFiles"] = ownedStoragePaths(uid, user).length;
+  counts["messages.senderId"] = await collectionGroupCount("messages", "senderId", uid);
+  counts["messages.uid"] = await collectionGroupCount("messages", "uid", uid);
+  const warnings = [];
+  if (user.role === "admin") warnings.push("Target user is an admin account.");
+  if (Array.isArray(user.managedGurdwaraIds) && user.managedGurdwaraIds.length) warnings.push("Target user has managedGurdwaraIds on profile.");
+  return { counts, warnings };
+}
+
+async function collectionGroupCount(collectionName, field, uid) {
+  try {
+    const snap = await admin.firestore().collectionGroup(collectionName).where(field, "==", uid).count().get();
+    return snap.data().count || 0;
+  } catch (error) {
+    logger.warn("Permanent user deletion collection-group count failed.", { collectionName, field, uid, message: error.message });
+    return -1;
+  }
+}
 
 async function linkedUserRecordCounts(uid) {
   const checks = [
     ["requests", "requesterId"],
     ["requests", "userId"],
     ["requests", "helperId"],
+    ["requests", "sevadaarId"],
     ["help_connections", "requesterId"],
     ["help_connections", "helperId"],
+    ["help_connections", "userId"],
     ["sessions", "userId"],
+    ["sessions", "uid"],
     ["location_sessions", "userId"],
+    ["location_sessions", "uid"],
     ["ratings", "fromUserId"],
     ["ratings", "toUserId"],
+    ["ratings", "userId"],
     ["reports", "reporterId"],
     ["reports", "reportedUserId"],
-    ["chats", "participantIds"]
+    ["reports", "userId"],
+    ["chats", "participantIds"],
+    ["gurdwaras", "adminIds"],
+    ["gurdwaras", "admins"],
+    ["organisations", "adminIds"],
+    ["organisations", "admins"]
   ];
   const result = {};
   await Promise.all(checks.map(async ([collectionName, field]) => {
     const key = `${collectionName}.${field}`;
     try {
       let query = admin.firestore().collection(collectionName).where(field, "==", uid);
-      if (field === "participantIds") query = admin.firestore().collection(collectionName).where(field, "array-contains", uid);
+      if (["participantIds", "adminIds", "admins"].includes(field)) query = admin.firestore().collection(collectionName).where(field, "array-contains", uid);
       const snap = await query.count().get();
       result[key] = snap.data().count || 0;
     } catch (error) {
-      logger.warn("Permanent user deletion preflight count failed.", { collectionName, field, uid, message: error.message });
+      logger.warn("Permanent user deletion count failed.", { collectionName, field, uid, message: error.message });
       result[key] = -1;
     }
   }));
   return result;
 }
+
+async function handleUserRequests(uid, stats) {
+  const refs = await uniqueDocsFromQueries("requests", ["requesterId", "userId", "helperId", "sevadaarId"], uid);
+  for (const ref of refs) {
+    const snap = await ref.get();
+    if (!snap.exists) continue;
+    const data = snap.data() || {};
+    const group = requestStatusGroup(data.status);
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp(), deletedUserParticipantIds: admin.firestore.FieldValue.arrayUnion(uid) };
+    if (["open", "active"].includes(group) && (data.requesterId === uid || data.userId === uid)) {
+      update.status = "closed";
+      update.closedAt = admin.firestore.FieldValue.serverTimestamp();
+      update.closedReason = "requester_deleted";
+    }
+    for (const field of ["requesterName", "helperName", "sevadaarName", "userName", "createdByName"]) {
+      if (data[field]) update[field] = "Deleted User";
+    }
+    await ref.update(update);
+    stats.recordsAnonymised += 1;
+  }
+}
+
+async function handleUserChats(uid, stats) {
+  const refs = await uniqueDocsFromQueries("chats", ["participantIds"], uid, { arrayFields: ["participantIds"] });
+  for (const ref of refs) {
+    await ref.update({
+      [`deletedParticipants.${uid}`]: true,
+      deletedParticipantIds: admin.firestore.FieldValue.arrayUnion(uid),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    stats.recordsPreserved += 1;
+  }
+}
+
+async function anonymiseMessages(uid, stats) {
+  const refs = await uniqueDocsFromQueries("messages", ["senderId", "uid"], uid, { collectionGroup: true });
+  for (const ref of refs) {
+    await ref.update({ senderName: "Deleted User", senderDeleted: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    stats.recordsAnonymised += 1;
+  }
+}
+
+async function deleteQueryMatches(collectionName, fields, uid, stats) {
+  const refs = await uniqueDocsFromQueries(collectionName, fields, uid);
+  await chunkedWrites(refs, async (batch, ref) => batch.delete(ref));
+  stats.recordsDeleted += refs.length;
+}
+
+async function anonymiseQueryMatches(collectionName, fields, uid, stats, extraUpdate) {
+  const refs = await uniqueDocsFromQueries(collectionName, fields, uid);
+  await chunkedWrites(refs, async (batch, ref) => batch.update(ref, { ...extraUpdate, deletedUserParticipantIds: admin.firestore.FieldValue.arrayUnion(uid), updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+  stats.recordsAnonymised += refs.length;
+}
+
+async function removeArrayReferences(collectionName, fields, uid, stats) {
+  const refs = await uniqueDocsFromQueries(collectionName, fields, uid, { arrayFields: fields });
+  await chunkedWrites(refs, async (batch, ref) => {
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp(), deletedAdminIds: admin.firestore.FieldValue.arrayUnion(uid) };
+    fields.forEach((field) => { update[field] = admin.firestore.FieldValue.arrayRemove(uid); });
+    batch.update(ref, update);
+  });
+  stats.recordsAnonymised += refs.length;
+}
+
+async function uniqueDocsFromQueries(collectionName, fields, uid, options = {}) {
+  const seen = new Map();
+  for (const field of fields) {
+    try {
+      const root = options.collectionGroup ? admin.firestore().collectionGroup(collectionName) : admin.firestore().collection(collectionName);
+      const op = (options.arrayFields || []).includes(field) ? "array-contains" : "==";
+      const snap = await root.where(field, op, uid).get();
+      snap.docs.forEach((doc) => seen.set(doc.ref.path, doc.ref));
+    } catch (error) {
+      logger.warn("Permanent user deletion query failed.", { collectionName, field, uid, message: error.message });
+      throw error;
+    }
+  }
+  return Array.from(seen.values());
+}
+
+async function chunkedWrites(refs, writeFn) {
+  for (let index = 0; index < refs.length; index += 450) {
+    const batch = admin.firestore().batch();
+    refs.slice(index, index + 450).forEach((ref) => writeFn(batch, ref));
+    await batch.commit();
+  }
+}
+
+async function deleteOwnedStorage(uid, user) {
+  const paths = ownedStoragePaths(uid, user);
+  if (!paths.length) return false;
+  await Promise.all(paths.map((path) => admin.storage().bucket().file(path).delete({ ignoreNotFound: true })));
+  return true;
+}
+
+function ownedStoragePaths(uid, user) {
+  const fields = ["photoPath", "profilePhotoPath", "profileImagePath", "avatarPath", "idDocumentPath", "identityDocumentPath", "verificationDocumentPath", "verificationImagePath", "selfiePath", "proofPath", "documentPath"];
+  return fields
+    .map((field) => stringValue(user[field]))
+    .filter((path) => path && !/^https?:\/\//i.test(path) && (path.includes(uid) || path.startsWith(`users/${uid}/`) || path.startsWith(`profileImages/${uid}/`)));
+}
+
+function requestStatusGroup(status) {
+  const value = stringValue(status).toLowerCase();
+  if (["open", "pending", "new"].includes(value)) return "open";
+  if (["accepted", "in_progress", "in progress", "active", "helping"].includes(value)) return "active";
+  if (["completed", "complete", "resolved", "done"].includes(value)) return "completed";
+  if (["cancelled", "canceled", "closed", "dismissed", "inactive"].includes(value)) return "closed";
+  return value || "open";
+}
+
+async function runCleanupStep(partialFailures, step, task) {
+  try {
+    await task();
+  } catch (error) {
+    logger.error("Permanent user deletion step failed.", { step, message: error.message });
+    partialFailures.push({ step, message: error.message });
+  }
+}
+
+function emptyDeletionStats() { return { recordsDeleted: 0, recordsAnonymised: 0, recordsPreserved: 0 }; }
+function safeTargetSnapshot(uid, user, profileExists) { return { uid, profileExists, displayName: safeDisplayName(user, uid), email: stringValue(user.email), role: stringValue(user.role) || "user" }; }
+function safeDisplayName(user, uid) { return stringValue(user.fullName) || stringValue(user.name) || stringValue(user.displayName) || stringValue(user.username) || stringValue(user.email) || uid; }
 function normaliseSignup(data) {
   return {
     name: stringValue(data.name),

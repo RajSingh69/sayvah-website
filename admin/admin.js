@@ -24,6 +24,10 @@ import {
   getCountFromServer,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {
+  getFunctions,
+  httpsCallable
+} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC2gzxxVo1WEHr8_BynpuyvxVry0WwqV7Q",
@@ -38,6 +42,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app, "europe-west2");
+const preparePermanentUserDeletion = httpsCallable(functions, "preparePermanentUserDeletion");
+const deleteUserPermanently = httpsCallable(functions, "deleteUserPermanently");
 
 const COLLECTIONS = {
   users: "users",
@@ -83,7 +90,8 @@ const state = {
   cache: new Map(),
   filters: {},
   verificationRows: [],
-  verificationUnsubscribe: null
+  verificationUnsubscribe: null,
+  deletionInProgress: false
 };
 
 const el = {
@@ -681,7 +689,7 @@ function userDangerZone(row) {
     <div class="danger-control"><div><strong>Community approval</strong><p class="muted">Controls the separate isApproved community approval state.</p>${approvalPill(row)}</div><button class="warning-button" data-action="toggle-approved">${row.isApproved === true ? "REMOVE COMMUNITY APPROVAL" : "APPROVE FOR COMMUNITY"}</button></div>
     <div class="danger-control"><div><strong>Account access</strong><p class="muted">${banDetails(row)}</p>${banPill(row)}</div><button class="danger-button" data-action="toggle-banned">${isBanned(row) ? "UNBAN USER" : "BAN USER"}</button></div>
     <div class="danger-control"><div><strong>Verification</strong><p class="muted">Revoke verification when a profile is no longer acceptable.</p>${statusPill(verificationLabel(row))}</div><button class="danger-button" data-action="revoke-verification" ${verificationState(row) === "verified" ? "" : "disabled"}>REVOKE VERIFICATION</button></div>
-    <div class="danger-control"><div><strong>Permanent account deletion</strong><p class="muted">Permanent account deletion must remove the Firebase Authentication account and safely handle linked SayVah data.</p></div><button class="danger-button" type="button" disabled>DELETE USER PERMANENTLY</button><small>Secure admin deletion service required.</small></div>
+    <div class="danger-control"><div><strong>Permanent account deletion</strong><p class="muted">Permanent account deletion must remove the Firebase Authentication account and safely handle linked SayVah data.</p></div><button class="danger-button" type="button" data-action="delete-user-permanently">DELETE USER PERMANENTLY</button><small>This permanently removes the user account through the secure backend deletion service.</small></div>
   </div>`;
 }
 function requestActions(row) {
@@ -715,6 +723,7 @@ function confirmAction(action, type, row, field = "") {
     "delete-launch-signup": "delete this launch signup",
     "delete-community-question": "delete this community question"
   };
+  if (action === "delete-user-permanently") return startPermanentUserDeletion(row);
   const destructive = action.startsWith("delete-");
   if (action === "verification-field-changes" && !reviewMessage) { showActionMessage("Please add an admin decision message for this field."); return; }
   el.confirmCopy.textContent = confirmationCopy(action, type, row, labels[action], destructive);
@@ -743,7 +752,81 @@ function configureDeleteConfirmation(required) {
     el.confirmSubmit.disabled = event.target.value !== "DELETE";
   });
 }
-function closeConfirm() { el.confirmModal.hidden = true; document.getElementById("delete-confirm-field")?.remove(); el.confirmSubmit.disabled = false; el.confirmSubmit.textContent = "Confirm"; el.confirmSubmit.className = "danger-button"; }
+function closeConfirm() { el.confirmModal.hidden = true; document.getElementById("delete-confirm-field")?.remove(); document.getElementById("delete-summary-panel")?.remove(); el.confirmSubmit.disabled = false; el.confirmSubmit.textContent = "Confirm"; el.confirmSubmit.className = "danger-button"; el.confirmSubmit.onclick = null; }
+async function startPermanentUserDeletion(row) {
+  if (state.deletionInProgress) return;
+  state.deletionInProgress = true;
+  el.confirmModal.hidden = false;
+  el.confirmSubmit.disabled = true;
+  el.confirmSubmit.textContent = "Loading dependency summary...";
+  el.confirmSubmit.className = "danger-button";
+  el.confirmCopy.textContent = `Preparing permanent deletion summary for ${displayName(row)} (${row.id})...`;
+  document.getElementById("delete-confirm-field")?.remove();
+  document.getElementById("delete-summary-panel")?.remove();
+  try {
+    const result = await preparePermanentUserDeletion({ uid: row.id, allowAdminDeletion: row.role === "admin" });
+    const summary = result.data?.dependencySummary || {};
+    const panel = document.createElement("div");
+    panel.id = "delete-summary-panel";
+    panel.className = "delete-summary-panel";
+    panel.innerHTML = `<h3>Dependency summary</h3><dl>${Object.entries(summary).map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`;
+    el.confirmCopy.textContent = `This permanently removes ${displayName(row)} from SayVah and cannot be undone. Name: ${displayName(row)}. Email: ${row.email || "Not recorded"}. UID: ${row.id}.`;
+    el.confirmCopy.insertAdjacentElement("afterend", panel);
+    configureDeleteConfirmation(true);
+    el.confirmSubmit.textContent = "PERMANENTLY DELETE USER";
+    el.confirmSubmit.className = "danger-button";
+    el.confirmSubmit.onclick = () => confirmPermanentUserDeletion(row);
+  } catch (error) {
+    el.confirmCopy.textContent = deletionErrorMessage(error);
+    el.confirmSubmit.textContent = "Close";
+    el.confirmSubmit.className = "soft-button";
+    el.confirmSubmit.disabled = false;
+    el.confirmSubmit.onclick = closeConfirm;
+  } finally {
+    state.deletionInProgress = false;
+  }
+}
+
+function confirmPermanentUserDeletion(row) {
+  const typed = document.getElementById("delete-confirm-input")?.value || "";
+  if (typed !== "DELETE") return;
+  document.getElementById("delete-summary-panel")?.remove();
+  document.getElementById("delete-confirm-field")?.remove();
+  el.confirmCopy.textContent = `Are you absolutely sure you want to permanently delete ${displayName(row)}?`;
+  el.confirmSubmit.textContent = "YES, DELETE PERMANENTLY";
+  el.confirmSubmit.className = "danger-button";
+  el.confirmSubmit.disabled = false;
+  el.confirmSubmit.onclick = () => runPermanentUserDeletion(row);
+}
+
+async function runPermanentUserDeletion(row) {
+  if (state.deletionInProgress) return;
+  state.deletionInProgress = true;
+  el.confirmSubmit.disabled = true;
+  el.confirmSubmit.textContent = "Deleting...";
+  try {
+    await deleteUserPermanently({ uid: row.id, confirmation: "DELETE", secondConfirmation: true, allowAdminDeletion: row.role === "admin" });
+    state.cache.clear();
+    closeConfirm();
+    closeModal();
+    renderPage(state.page);
+    showToast("User permanently deleted.");
+  } catch (error) {
+    el.confirmSubmit.disabled = false;
+    el.confirmSubmit.textContent = "Close";
+    el.confirmSubmit.className = "soft-button";
+    el.confirmSubmit.onclick = closeConfirm;
+    el.confirmCopy.textContent = deletionErrorMessage(error);
+    showToast("User deletion requires attention.", "error");
+  } finally {
+    state.deletionInProgress = false;
+  }
+}
+
+function deletionErrorMessage(error) {
+  const details = error?.details?.partialFailures?.map((failure) => `${failure.step}: ${failure.message}`).join("; ");
+  return details || error?.message || "User deletion requires attention.";
+}
 async function runAction(action, type, row, field = "") {
   const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
   const refs = { user: COLLECTIONS.users, request: COLLECTIONS.requests, area: COLLECTIONS.locations, report: COLLECTIONS.reports, signup: COLLECTIONS.launchSignups, question: COLLECTIONS.communityQuestions };

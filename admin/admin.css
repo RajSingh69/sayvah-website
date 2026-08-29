@@ -402,3 +402,132 @@ td, dd { overflow-wrap: anywhere; }
 .profile-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .profile-edit-panel .field { margin: 0; }
 @media (max-width: 820px) { .profile-edit-grid { grid-template-columns: 1fr; } }
+.delete-summary-panel { margin-top: 14px; padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(8,21,34,.72); }
+.delete-summary-panel h3 { margin: 0 0 10px; }
+.delete-summary-panel dl { margin: 0; display: grid; gap: 7px; }
+.delete-summary-panel div { display: grid; grid-template-columns: minmax(160px, 1fr) auto; gap: 10px; }
+
+/* Responsive layout repair */
+.modal-panel {
+  width: min(1000px, calc(100vw - 48px));
+  max-height: 100vh;
+  overflow-x: hidden;
+}
+.confirm-panel {
+  width: min(560px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.panel, .record-card, .detail-grid, .detail-grid > *, .record-card > *, .danger-control > *, .profile-check-row > *, .community-status .status-grid > *, .delete-summary-panel > * {
+  min-width: 0;
+}
+.status {
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.35;
+  text-align: center;
+}
+.action-row {
+  gap: 12px;
+}
+.action-row button, .review-controls button, .danger-control button, .decision-actions button {
+  min-height: 46px;
+  min-width: 150px;
+  padding: 10px 18px;
+  line-height: 1.2;
+  white-space: normal;
+}
+.admin-danger {
+  gap: 20px;
+}
+.danger-control {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 20px;
+}
+.danger-control > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.danger-control strong, .profile-check-row strong {
+  display: block;
+  line-height: 1.25;
+}
+.danger-control p, .profile-check-row p {
+  margin: 0;
+  line-height: 1.55;
+}
+.danger-control .status {
+  align-self: flex-start;
+}
+.danger-control button {
+  width: min(360px, 100%);
+}
+.profile-check-list {
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  gap: 16px;
+}
+.profile-check-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px;
+}
+.profile-check-row > div, .review-controls {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.review-controls {
+  gap: 10px;
+  align-items: flex-start;
+}
+.review-controls button {
+  width: min(220px, 100%);
+}
+.community-status .status-grid {
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+}
+.community-status .status-grid > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.verification-summary {
+  grid-template-columns: 44px minmax(220px, 1fr);
+}
+.verification-summary .status-stack {
+  grid-column: 1 / -1;
+}
+.delete-summary-panel div {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 1000px) {
+  .modal-panel { width: min(920px, calc(100vw - 24px)); }
+  .profile-check-list, .community-status .status-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .modal-panel {
+    width: calc(100vw - 24px);
+    padding: 18px;
+  }
+  .action-row button, .review-controls button, .danger-control button, .decision-actions button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+@media (max-width: 390px) {
+  .modal-panel {
+    width: 100%;
+    padding: 14px;
+  }
+  .panel, .record-card, .danger-control, .profile-check-row {
+    padding: 16px;
+  }
+}
