@@ -1,4 +1,5 @@
-﻿const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -107,6 +108,79 @@ exports.sendLaunchSignupNotification = onDocumentCreated(
   }
 );
 
+
+exports.preparePermanentUserDeletion = onCall(
+  { region: "europe-west2" },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Authentication required.");
+
+    const callerSnap = await admin.firestore().collection("users").doc(callerUid).get();
+    if (!callerSnap.exists || (callerSnap.data() || {}).role !== "admin") {
+      throw new HttpsError("permission-denied", "SayVah admin role required.");
+    }
+
+    const targetUid = stringValue(request.data && request.data.uid);
+    const confirmation = stringValue(request.data && request.data.confirmation);
+    if (!targetUid) throw new HttpsError("invalid-argument", "Target UID is required.");
+    if (targetUid === callerUid) throw new HttpsError("failed-precondition", "Admins cannot delete their own account.");
+    if (confirmation !== "DELETE") throw new HttpsError("failed-precondition", "Typed DELETE confirmation is required.");
+
+    const targetRef = admin.firestore().collection("users").doc(targetUid);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) throw new HttpsError("not-found", "Target user does not exist.");
+
+    const linkedRecords = await linkedUserRecordCounts(targetUid);
+    const hasLinkedRecords = Object.values(linkedRecords).some((count) => count > 0);
+    await admin.firestore().collection("adminAuditLogs").add({
+      adminUid: callerUid,
+      action: "user_delete_preflight",
+      targetType: "user",
+      targetId: targetUid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      summary: hasLinkedRecords ? "Permanent user deletion blocked by linked SayVah records." : "Permanent user deletion preflight completed; deletion service still requires final cleanup policy.",
+      linkedRecords
+    });
+
+    throw new HttpsError(
+      "failed-precondition",
+      hasLinkedRecords
+        ? "Permanent deletion requires dependency-aware cleanup for linked SayVah records."
+        : "Permanent deletion service is prepared but final Auth/Storage cleanup policy is not enabled."
+    );
+  }
+);
+
+async function linkedUserRecordCounts(uid) {
+  const checks = [
+    ["requests", "requesterId"],
+    ["requests", "userId"],
+    ["requests", "helperId"],
+    ["help_connections", "requesterId"],
+    ["help_connections", "helperId"],
+    ["sessions", "userId"],
+    ["location_sessions", "userId"],
+    ["ratings", "fromUserId"],
+    ["ratings", "toUserId"],
+    ["reports", "reporterId"],
+    ["reports", "reportedUserId"],
+    ["chats", "participantIds"]
+  ];
+  const result = {};
+  await Promise.all(checks.map(async ([collectionName, field]) => {
+    const key = `${collectionName}.${field}`;
+    try {
+      let query = admin.firestore().collection(collectionName).where(field, "==", uid);
+      if (field === "participantIds") query = admin.firestore().collection(collectionName).where(field, "array-contains", uid);
+      const snap = await query.count().get();
+      result[key] = snap.data().count || 0;
+    } catch (error) {
+      logger.warn("Permanent user deletion preflight count failed.", { collectionName, field, uid, message: error.message });
+      result[key] = -1;
+    }
+  }));
+  return result;
+}
 function normaliseSignup(data) {
   return {
     name: stringValue(data.name),

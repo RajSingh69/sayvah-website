@@ -603,7 +603,7 @@ function bindTabs(key) {
 function userToolbar(key, sevadaarsOnly) {
   const f = state.filters[key] || {};
   return `<div class="toolbar user-toolbar">
-    <input data-user-filter="${key}" data-field="search" value="${escapeAttr(f.search || "")}" placeholder="Search name, email, UID, area or role" />
+    <input data-user-filter="${key}" data-field="search" value="${escapeAttr(f.search || "")}" placeholder="Search users by name, email, UID, area or role..." />
     <select data-user-filter="${key}" data-field="role"><option value="">All roles</option>${["requester","sevadaar","both","admin"].map((v) => option(v, f.role)).join("")}</select>
     <select data-user-filter="${key}" data-field="verification"><option value="">All verification</option>${["verified","pending","changes_required","unverified"].map((v) => option(v, f.verification)).join("")}</select>
     <select data-user-filter="${key}" data-field="state"><option value="">All states</option>${["active","hidden","banned"].map((v) => option(v, f.state)).join("")}</select>
@@ -635,17 +635,17 @@ function cards(rows, cardFn) { return `<div class="record-grid mobile-cards">${r
 function bindRecordClicks(rows, type) {
   document.querySelectorAll("[data-record-id]").forEach((node) => node.addEventListener("click", () => openDetail(type, rows.find((row) => row.id === node.dataset.recordId))));
 }
-function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(nameOrId(r.requesterName || r.requesterId || r.userId))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}</td>`; }
-function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(u.role || u.userType || u.accountType || "user")}</td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationState(u))}<br><span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span><br><span class="muted">Evidence: ${evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "none"}</span></td>`; }
+function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(requesterLabel(r))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}<br><button class="soft-button table-action" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></td>`; }
+function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(roleLabel(u))}</td><td>${escapeHtml(areaOf(u))}</td><td><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}<span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span></div></td>`; }
 function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "No email")}</span><br><span class="muted">UID: ${escapeHtml(u.id)}</span><br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
 function chatCells(c) { return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`; }
 function reportCells(r) { return `<td>${escapeHtml(r.reason || r.type || r.id)}<br><span class="muted">${escapeHtml(r.description || "")}</span></td><td>${escapeHtml(nameOrId(r.reporterName || r.reporterId))}</td><td>${escapeHtml(nameOrId(r.reportedUserName || r.reportedUserId || r.userId))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt || r.timestamp)}</td>`; }
 function orgCells(o) { return `<td>${escapeHtml(o.name || o.title || o.id)}</td><td>${escapeHtml(areaOf(o) || o.location || "")}</td><td>${statusPill(o.active === false ? "inactive" : (o.status || "active"))}</td><td>${escapeHtml(list(o.admins || o.adminIds || o.managedBy))}</td><td>${formatDate(o.updatedAt || o.createdAt)}</td>`; }
 function signupCells(s) { return `<td>${escapeHtml(s.name || "Not provided")}</td><td><a href="mailto:${escapeAttr(s.email || "")}">${escapeHtml(s.email || "")}</a><br><button class="soft-button" type="button" data-copy-email="${escapeAttr(s.email || "")}">Copy email</button></td><td>${escapeHtml(s.area || "")}</td><td>${escapeHtml(s.interest || "")}</td><td>${statusPill(s.notificationEmailStatus || (s.notificationEmailSent ? "sent" : "pending"))}<br><span class="muted">${formatDate(s.notificationEmailSentAt)}</span></td>`; }
 function qaCells(q) { return `<td>${escapeHtml(q.question || q.title || q.id)}</td><td>${escapeHtml(nameOrId(q.submitterName || q.userId || q.uid))}</td><td>${statusPill(q.status || (q.approved ? "approved" : "pending"))}</td><td>${escapeHtml(q.answer || q.response || "")}</td>`; }
-function requestCard(r) { return recordCard(r, requestTitle(r), { ID: r.id, Requester: nameOrId(r.requesterName || r.requesterId || r.userId), Area: areaOf(r), Status: r.status || "unknown", Created: formatDate(r.createdAt) }); }
-function userCard(u) { return recordCard(u, displayName(u), { UID: u.id, Email: u.email || "", Role: u.role || u.userType || u.accountType || "user", Area: areaOf(u), Verification: verificationState(u), Approved: u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded", Evidence: evidenceFor(u).length ? evidenceFor(u).length + " field(s)" : "No ID verification document is currently stored for this user.", Joined: formatDate(u.createdAt) }); }
-function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>${escapeHtml(u.email || "No email")}</p><p>UID: ${escapeHtml(u.id)}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div>${statusPill(verificationLabel(u))}</div></article>`; }
+function requestCard(r) { return `<article class="record-card" data-record-id="${escapeAttr(r.id)}"><h3>${escapeHtml(requestTitle(r))}</h3><dl><div><dt>ID</dt><dd>${escapeHtml(r.id)}</dd></div><div><dt>Requester</dt><dd>${escapeHtml(requesterLabel(r))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(r))}</dd></div><div><dt>Status</dt><dd>${escapeHtml(r.status || "unknown")}</dd></div><div><dt>Created</dt><dd>${formatDate(r.createdAt)}</dd></div></dl><div class="action-row"><button class="soft-button" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></div></article>`; }
+function userCard(u) { return `<article class="record-card" data-record-id="${escapeAttr(u.id)}"><div class="person-card-head">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p class="muted">${escapeHtml(u.email || "No email")}</p></div></div><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}</div><dl><div><dt>UID</dt><dd>${escapeHtml(u.id)}</dd></div><div><dt>Role</dt><dd>${escapeHtml(roleLabel(u))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(u))}</dd></div><div><dt>Approved</dt><dd>${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</dd></div></dl></article>`; }
+function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>${escapeHtml(u.email || "No email")}</p><p>UID: ${escapeHtml(u.id)}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div><div class="status-stack">${statusPill(verificationLabel(u))}${visibilityPill(u)}${banPill(u)}</div></div></article>`; }
 function chatCard(c) { return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) }); }
 function reportCard(r) { return recordCard(r, r.reason || r.type || r.id, { Reporter: nameOrId(r.reporterName || r.reporterId), Reported: nameOrId(r.reportedUserName || r.reportedUserId || r.userId), Status: r.status || "unknown", Date: formatDate(r.createdAt || r.timestamp) }); }
 function orgCard(o) { return recordCard(o, o.name || o.title || o.id, { Area: areaOf(o) || o.location || "", Status: o.active === false ? "inactive" : (o.status || "active"), Admins: list(o.admins || o.adminIds || o.managedBy) }); }
@@ -667,23 +667,37 @@ function actionButtons(type, row) {
   if (type === "area") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="warning-button" data-action="toggle-area">${row.active === false ? "Activate area" : "Deactivate area"}</button></div></div>`;
   if (type === "user") {
     const verified = verificationState(row) === "verified";
-    return `<div class="panel"><h2>Verification decision</h2><div id="action-message" class="form-message" aria-live="polite"></div><div class="field"><label for="review-message">Required reason for denied / changes requested</label><textarea id="review-message">${escapeHtml(row.verificationReviewMessage || "")}</textarea></div><div class="action-row"><button class="success-button" data-action="approve-verification" ${verified ? "disabled" : ""}>Approve</button><button class="warning-button" data-action="deny-verification">Deny / Request Changes</button></div></div>${userDangerZone(row)}`;
+    return `${verificationDecisionPanel(row, verified)}${userDangerZone(row)}`;
   }
+  if (type === "request") return requestActions(row);
   if (type === "report") return `<div class="panel"><h2>Admin actions</h2><div class="action-row"><button class="soft-button" data-action="resolve-report">Resolve report</button><button class="soft-button" data-action="dismiss-report">Dismiss report</button></div><p class="muted action-note">Permanent report deletion is unavailable because reports are safety and moderation records.</p></div>`;
   if (type === "signup") return `<div class="panel danger-zone"><h2>Delete launch signup</h2><p class="muted">This removes this standalone website launch signup record.</p><div class="action-row"><button class="danger-button" data-action="delete-launch-signup">Delete Signup</button></div></div>`;
   if (type === "question") return `<div class="panel danger-zone"><h2>Delete community question</h2><p class="muted">This removes this standalone community question record.</p><div class="action-row"><button class="danger-button" data-action="delete-community-question">Delete Question</button></div></div>`;
   return `<div class="panel"><h2>Admin actions</h2><p class="muted">No safe write actions are enabled for this record until the production app schema is confirmed.</p></div>`;
 }
 function userDangerZone(row) {
-  return `<div class="panel danger-zone"><h2>Danger zone</h2><p class="muted">Permanent user deletion requires the secure admin deletion service. This interface can only use reversible community controls.</p><div class="action-row"><button class="warning-button" data-action="toggle-hidden">${isHidden(row) ? "Unhide User" : "Hide User"}</button><button class="danger-button" data-action="toggle-banned">${isBanned(row) ? "Unban User" : "Ban User"}</button><button class="danger-button" type="button" disabled>Permanent Deletion Unavailable</button></div></div>`;
+  return `<div class="panel danger-zone admin-danger"><h2>Danger zone</h2><p class="muted">High-impact account administration controls.</p>
+    <div class="danger-control"><div><strong>Community visibility</strong><p class="muted">Controls whether this member appears in community-facing areas.</p>${visibilityPill(row)}</div><button class="warning-button" data-action="toggle-hidden">${isHidden(row) ? "SHOW IN COMMUNITY" : "HIDE FROM COMMUNITY"}</button></div>
+    <div class="danger-control"><div><strong>Community approval</strong><p class="muted">Controls the separate isApproved community approval state.</p>${approvalPill(row)}</div><button class="warning-button" data-action="toggle-approved">${row.isApproved === true ? "REMOVE COMMUNITY APPROVAL" : "APPROVE FOR COMMUNITY"}</button></div>
+    <div class="danger-control"><div><strong>Account access</strong><p class="muted">${banDetails(row)}</p>${banPill(row)}</div><button class="danger-button" data-action="toggle-banned">${isBanned(row) ? "UNBAN USER" : "BAN USER"}</button></div>
+    <div class="danger-control"><div><strong>Verification</strong><p class="muted">Revoke verification when a profile is no longer acceptable.</p>${statusPill(verificationLabel(row))}</div><button class="danger-button" data-action="revoke-verification" ${verificationState(row) === "verified" ? "" : "disabled"}>REVOKE VERIFICATION</button></div>
+    <div class="danger-control"><div><strong>Permanent account deletion</strong><p class="muted">Permanent account deletion must remove the Firebase Authentication account and safely handle linked SayVah data.</p></div><button class="danger-button" type="button" disabled>DELETE USER PERMANENTLY</button><small>Secure admin deletion service required.</small></div>
+  </div>`;
+}
+function requestActions(row) {
+  const closed = statusGroup(row.status) === "closed";
+  return `<div class="panel"><h2>Request management</h2>${detailSection("Request action summary", { Title: requestTitle(row), Requester: requesterLabel(row), RequestId: row.id, CurrentStatus: row.status || "open", Helper: nameOrId(row.helperName || row.helperId || row.sevadaarId), Chat: row.chatId || row.chatID || row.conversationId || "Not linked" })}<div id="action-message" class="form-message" aria-live="polite"></div><div class="action-row"><button class="warning-button" data-action="close-request" ${closed ? "disabled" : ""}>CLOSE SEVA</button></div></div><div class="panel danger-zone admin-danger"><h2>Danger zone</h2><div class="danger-control"><div><strong>Permanent deletion</strong><p class="muted">Permanent deletion is unavailable because this request may have linked platform records.</p></div><button class="danger-button" type="button" disabled>DELETE PERMANENTLY</button></div></div>`;
+}
+function verificationDecisionPanel(row, verified) {
+  return `<div class="panel verification-decision"><h2>Verification decision</h2><div id="action-message" class="form-message" aria-live="polite"></div><div class="field"><label for="review-message">Admin decision / review message</label><textarea id="review-message">${escapeHtml(row.verificationReviewMessage || "")}</textarea><small class="muted">Required when requesting changes. Approval notes are recorded in the admin audit log.</small></div><div class="action-row decision-actions"><button class="success-button" data-action="approve-verification" ${verified ? "disabled" : ""}>APPROVE ACCOUNT</button><button class="warning-button" data-action="deny-verification">REQUEST CHANGES</button></div></div>`;
 }
 function bindActions(type, row) {
-  document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => confirmAction(button.dataset.action, type, row)));
+  document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => confirmAction(button.dataset.action, type, row, button.dataset.field || "")));
 }
-function confirmAction(action, type, row) {
+function confirmAction(action, type, row, field = "") {
   const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
-  if (action === "deny-verification" && !reviewMessage) {
-    showActionMessage("Please provide a review reason before requesting changes.");
+  if ((action === "deny-verification" || action === "revoke-verification") && !reviewMessage) {
+    showActionMessage("Please provide an admin decision message before continuing.");
     return;
   }
   const labels = {
@@ -692,24 +706,29 @@ function confirmAction(action, type, row) {
     "deny-verification": "request changes for this SayVah account",
     "toggle-hidden": isHidden(row) ? "unhide this user" : "hide this user",
     "toggle-banned": isBanned(row) ? "unban this user" : "ban this user",
+    "revoke-verification": "revoke verification for this user",
+    "close-request": "close this Seva request",
+    "verification-field-approved": `mark ${fieldLabel(field)} accepted`,
+    "verification-field-changes": `mark ${fieldLabel(field)} as needing a fix`,
     "resolve-report": "mark this report resolved",
     "dismiss-report": "dismiss this report",
     "delete-launch-signup": "delete this launch signup",
     "delete-community-question": "delete this community question"
   };
   const destructive = action.startsWith("delete-");
-  el.confirmCopy.textContent = action === "approve-verification" ? "Approve this SayVah account?" : `Please confirm you want to ${labels[action]}: ${detailTitle(type, row)} (${row.id}). This ${destructive ? "cannot be undone and" : ""} will create an admin audit log.`;
+  if (action === "verification-field-changes" && !reviewMessage) { showActionMessage("Please add an admin decision message for this field."); return; }
+  el.confirmCopy.textContent = confirmationCopy(action, type, row, labels[action], destructive);
   configureDeleteConfirmation(destructive);
   el.confirmModal.hidden = false;
   el.confirmSubmit.textContent = destructive ? "Delete" : "Confirm";
   el.confirmSubmit.className = confirmButtonClass(action);
   el.confirmSubmit.disabled = destructive;
-  el.confirmSubmit.onclick = () => runAction(action, type, row);
+  el.confirmSubmit.onclick = () => runAction(action, type, row, field);
 }
 function confirmButtonClass(action) {
   if (action === "approve-verification") return "success-button";
-  if (action === "deny-verification" || action === "toggle-area" || action === "toggle-hidden") return "warning-button";
-  if (action === "toggle-banned" || action.startsWith("delete-")) return "danger-button";
+  if (action === "deny-verification" || action === "toggle-area" || action === "toggle-hidden" || action === "toggle-approved" || action === "save-profile" || action === "close-request") return "warning-button";
+  if (action === "toggle-banned" || action === "revoke-verification" || action.startsWith("delete-")) return "danger-button";
   return "primary-button";
 }
 function configureDeleteConfirmation(required) {
@@ -725,24 +744,40 @@ function configureDeleteConfirmation(required) {
   });
 }
 function closeConfirm() { el.confirmModal.hidden = true; document.getElementById("delete-confirm-field")?.remove(); el.confirmSubmit.disabled = false; el.confirmSubmit.textContent = "Confirm"; el.confirmSubmit.className = "danger-button"; }
-async function runAction(action, type, row) {
+async function runAction(action, type, row, field = "") {
   const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
-  const refs = { user: COLLECTIONS.users, area: COLLECTIONS.locations, report: COLLECTIONS.reports, signup: COLLECTIONS.launchSignups, question: COLLECTIONS.communityQuestions };
+  const refs = { user: COLLECTIONS.users, request: COLLECTIONS.requests, area: COLLECTIONS.locations, report: COLLECTIONS.reports, signup: COLLECTIONS.launchSignups, question: COLLECTIONS.communityQuestions };
   const updates = {
     "toggle-area": { active: row.active === false },
     "approve-verification": { isVerified: true, verificationStatus: "verified", verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid, verificationReviewMessage: "" },
     "deny-verification": { isVerified: false, verificationStatus: "changes_requested", verificationReviewMessage: reviewMessage, verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid },
-    "toggle-hidden": { isHiddenFromCommunity: !isHidden(row), hidden: !isHidden(row) },
-    "toggle-banned": { isBanned: !isBanned(row), banned: !isBanned(row) },
+    "revoke-verification": { isVerified: false, verificationStatus: "changes_requested", verificationReviewMessage: reviewMessage, verificationReviewedAt: serverTimestamp(), verificationReviewedBy: state.user.uid },
+    "toggle-hidden": { isHiddenFromCommunity: !isHidden(row), updatedAt: serverTimestamp() },
+    "toggle-approved": { isApproved: row.isApproved !== true, updatedAt: serverTimestamp(), approvalReviewedAt: serverTimestamp(), approvalReviewedBy: state.user.uid },
+    "toggle-banned": { isBanned: !isBanned(row), banReason: !isBanned(row) ? reviewMessage : "", bannedAt: !isBanned(row) ? serverTimestamp() : null, bannedBy: !isBanned(row) ? state.user.uid : "", updatedAt: serverTimestamp() },
+    "close-request": { status: "closed", updatedAt: serverTimestamp(), closedAt: serverTimestamp(), closedBy: state.user.uid },
     "resolve-report": { status: "resolved", resolvedAt: serverTimestamp(), resolvedBy: state.user.uid },
     "dismiss-report": { status: "dismissed", resolvedAt: serverTimestamp(), resolvedBy: state.user.uid }
   };
   try {
+    if (action === "save-profile") {
+      await updateDoc(doc(db, COLLECTIONS.users, row.id), profileEditUpdates(row));
+    } else if (action === "verification-field-approved" || action === "verification-field-changes") {
+      const decision = action === "verification-field-approved" ? "approved" : "changes_requested";
+      await updateDoc(doc(db, COLLECTIONS.users, row.id), {
+        [`verificationChecks.${field}`]: decision,
+        [`verificationCheckMessages.${field}`]: action === "verification-field-changes" ? reviewMessage : "",
+        verificationChecksUpdatedAt: serverTimestamp(),
+        verificationChecksUpdatedBy: state.user.uid,
+        updatedAt: serverTimestamp()
+      });
+    } else {
     const collectionName = refs[type];
     if (action.startsWith("delete-")) {
       await deleteDoc(doc(db, collectionName, row.id));
     } else {
       await updateDoc(doc(db, collectionName, row.id), updates[action]);
+    }
     }
     await addDoc(collection(db, COLLECTIONS.audit), {
       adminUid: state.user.uid,
@@ -750,7 +785,8 @@ async function runAction(action, type, row) {
       targetType: type,
       targetId: row.id,
       timestamp: serverTimestamp(),
-      summary: `${auditName(action, row)} on ${detailTitle(type, row)}`
+      summary: `${auditName(action, row)} on ${detailTitle(type, row)}`,
+      ...(reviewMessage ? { reviewNote: reviewMessage } : {})
     });
     state.cache.clear();
     closeConfirm();
@@ -777,7 +813,7 @@ function showToast(message, tone = "success") {
   el.toastTimer = window.setTimeout(() => el.toast?.classList.remove("success", "error"), 2600);
 }
 function successMessage(action) {
-  return ({ "approve-verification": "Verification approved.", "deny-verification": "Changes requested.", "toggle-hidden": "User visibility updated.", "toggle-banned": "User ban state updated.", "toggle-area": "Area status updated.", "resolve-report": "Report resolved.", "dismiss-report": "Report dismissed.", "delete-launch-signup": "Launch signup deleted.", "delete-community-question": "Community question deleted." })[action] || "Action completed.";
+  return ({ "approve-verification": "Verification approved.", "deny-verification": "Changes requested.", "toggle-approved": "Community approval updated.", "save-profile": "Profile updated.", "verification-field-approved": "Profile requirement accepted.", "verification-field-changes": "Profile requirement marked needs fix.", "revoke-verification": "Verification revoked.", "close-request": "Seva request closed.", "toggle-hidden": "User visibility updated.", "toggle-banned": "User ban state updated.", "toggle-area": "Area status updated.", "resolve-report": "Report resolved.", "dismiss-report": "Report dismissed.", "delete-launch-signup": "Launch signup deleted.", "delete-community-question": "Community question deleted." })[action] || "Action completed.";
 }
 function failureMessage(action) {
   return ({ "approve-verification": "Approval failed.", "deny-verification": "Unable to request changes.", "delete-launch-signup": "Unable to delete launch signup.", "delete-community-question": "Unable to delete community question." })[action] || "Unable to complete action.";
@@ -808,10 +844,10 @@ function bindCopyEmail() {
   }));
 }
 function auditName(action, row) {
-  const map = { "approve-verification": "verification_approved", "deny-verification": "verification_changes_requested", "resolve-report": "report_resolved", "dismiss-report": "report_dismissed", "delete-launch-signup": "launch_signup_deleted", "delete-community-question": "community_question_deleted" };
+  const map = { "approve-verification": "verification_approved", "deny-verification": "verification_changes_requested", "revoke-verification": "verification_revoked", "verification-field-approved": "verification_field_approved", "verification-field-changes": "verification_field_changes_requested", "toggle-approved": row.isApproved === true ? "user_unapproved" : "user_approved", "save-profile": "user_profile_updated", "close-request": "request_closed", "resolve-report": "report_resolved", "dismiss-report": "report_dismissed", "delete-launch-signup": "launch_signup_deleted", "delete-community-question": "community_question_deleted" };
   if (action === "toggle-area") return row.active === false ? "area_activated" : "area_deactivated";
-  if (action === "toggle-hidden") return row.hidden ? "user_unhidden" : "user_hidden";
-  if (action === "toggle-banned") return row.banned ? "user_unbanned" : "user_banned";
+  if (action === "toggle-hidden") return isHidden(row) ? "user_unhidden" : "user_hidden";
+  if (action === "toggle-banned") return isBanned(row) ? "user_unbanned" : "user_banned";
   return map[action] || action;
 }
 function detailSection(title, fields) { return `<section class="panel"><h2>${escapeHtml(title)}</h2><dl>${Object.entries(fields).map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl></section>`; }
@@ -823,11 +859,13 @@ function userDetailSections(u) {
   return statusWarnings(u)
     + `<section class="panel profile-review"><h2>Profile picture</h2>${photo ? `<a class="profile-photo-button" href="${escapeAttr(photo)}" target="_blank" rel="noopener noreferrer"><img src="${escapeAttr(photo)}" alt="" /></a>` : `<div class="empty">Profile picture missing</div>`}</section>`
     + detailSection("Profile", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: roleLabel(u), Area: areaOf(u), LocationId: u.locationId || "Not recorded", LinkedIn: linkedIn ? "Provided" : "Not provided", Joined: formatDate(u.createdAt) })
+    + profileEditPanel(u)
     + `<section class="panel"><h2>LinkedIn</h2>${linkedIn ? `<a class="soft-button evidence-link" href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a>` : `<div class="empty">Not provided</div>`}</section>`
     + detailSection("Verification", { isVerified: String(u.isVerified ?? "Not recorded"), verificationStatus: verificationLabel(u), verificationRequestedAt: formatDate(u.verificationRequestedAt), verificationReviewedAt: formatDate(u.verificationReviewedAt), verificationReviewedBy: u.verificationReviewedBy || "Not recorded", verificationReviewMessage: u.verificationReviewMessage || "Not recorded" })
     + profileChecklist(u)
     + detailSection("Activity", { Joined: formatDate(u.createdAt), LastUpdated: formatDate(u.updatedAt), LastVerificationSubmission: formatDate(u.verificationRequestedAt) })
     + `<section class="panel"><h2>ID / verification evidence</h2>${evidence.length ? evidence.map((item) => `<article class="record-card"><h3>${escapeHtml(item.key)}</h3><a class="soft-button" href="${escapeAttr(item.value)}" target="_blank" rel="noopener noreferrer">Open evidence</a></article>`).join("") : `<div class="empty">No ID verification document is currently stored for this user.</div>`}</section>`
+    + communityStatusBlock(u)
     + detailSection("Community / safety status", { isApproved: String(u.isApproved ?? "Not recorded"), Banned: String(isBanned(u)), Hidden: String(isHidden(u)), TempleAdmin: String(u.isTempleAdmin ?? "Not recorded"), AdminRole: u.role === "admin" ? "admin" : "Not recorded", Gurdwara: u.gurdwaraName || u.gurdwaraId || list(u.managedGurdwaraIds), Organisation: u.organisationName || u.organisationId || u.organizationName || u.organizationId || "Not recorded" });
 }
 function statusWarnings(u) {
@@ -851,7 +889,8 @@ function filterUser(row, filters, sevadaarsOnly) {
   if (filters.state === "banned" && !isBanned(row)) return false;
   if (filters.state === "active" && (isHidden(row) || isBanned(row))) return false;
   if (sevadaarsOnly && filters.quick && filters.quick !== "all") {
-    if (["hidden", "banned"].includes(filters.quick)) return Boolean(row[filters.quick]);
+    if (filters.quick === "hidden") return isHidden(row);
+    if (filters.quick === "banned") return isBanned(row);
     return verificationState(row) === filters.quick;
   }
   return true;
@@ -900,15 +939,54 @@ function verificationLabel(u) {
   return "Unverified";
 }
 function profileChecklist(u) {
+  const checks = u.verificationChecks || {};
   const items = [
-    ["Full name", hasName(u)],
-    ["Profile picture", Boolean(profileImageUrl(u))],
-    ["Area", hasArea(u)],
-    ["Role", hasRole(u)],
-    ["LinkedIn optional", true],
-    ["Overall profile completeness", profileComplete(u)]
+    ["fullName", "Full Name", displayName(u), hasName(u)],
+    ["profilePicture", "Profile Picture", profileImageUrl(u) ? "Image provided" : "Not recorded", Boolean(profileImageUrl(u))],
+    ["area", "Area", areaOf(u), hasArea(u)],
+    ["role", "Role", roleLabel(u), hasRole(u)]
   ];
-  return `<section class="panel"><h2>Profile completion</h2><ul class="checklist">${items.map(([label, ok]) => `<li class="${ok ? "ok" : "missing"}"><span>${ok ? "Yes" : "No"}</span>${escapeHtml(label)}</li>`).join("")}</ul></section>`;
+  return `<section class="panel profile-check-panel"><h2>Profile completion review</h2><div class="profile-check-list">${items.map(([key, label, value, ok]) => {
+    const decision = checks[key] || "unreviewed";
+    return `<article class="profile-check-row"><div><strong>${escapeHtml(label)}</strong><p>Actual value: ${escapeHtml(value || "Not recorded")}</p><p>Data: ${ok ? "Complete" : "Missing"}</p></div><div class="review-controls"><span class="status ${decision === "approved" ? "green" : decision === "changes_requested" ? "red" : "orange"}">Review: ${decisionLabel(decision)}</span><button class="success-button" type="button" data-action="verification-field-approved" data-field="${escapeAttr(key)}">ACCEPTED</button><button class="warning-button" type="button" data-action="verification-field-changes" data-field="${escapeAttr(key)}">NEEDS FIX</button></div></article>`;
+  }).join("")}</div><p class="muted action-note">Field decisions are stored as admin-only verificationChecks metadata and do not overwrite profile data.</p></section>`;
+}
+function profileEditPanel(u) {
+  const roleControl = u.role === "admin"
+    ? `<div class="field"><label>Role</label><div class="empty">Admin role is protected and cannot be changed here.</div></div>`
+    : `<div class="field"><label for="edit-role">Role</label><select id="edit-role">${["requester","sevadaar","both"].map((role) => option(role, roleGroup(u))).join("")}</select></div>`;
+  return `<section class="panel profile-edit-panel"><h2>Edit user profile</h2><p class="muted">Safe Firestore profile fields only. Email, password, auth credentials, FCM tokens and admin role assignment are not editable here.</p><div class="profile-edit-grid"><div class="field"><label for="edit-fullName">Full name</label><input id="edit-fullName" value="${escapeAttr(u.fullName || u.name || u.displayName || "")}" /></div><div class="field"><label for="edit-area">Area</label><input id="edit-area" value="${escapeAttr(areaOf(u) === "Not recorded" ? "" : areaOf(u))}" /></div>${roleControl}<div class="field"><label for="edit-linkedinUrl">LinkedIn</label><input id="edit-linkedinUrl" value="${escapeAttr(u.linkedinUrl || "")}" /></div></div><div class="action-row"><button class="warning-button" data-action="save-profile">SAVE PROFILE CHANGES</button></div></section>`;
+}
+function profileEditUpdates(row) {
+  const safeFields = { fullName: document.getElementById("edit-fullName")?.value?.trim() || "", area: document.getElementById("edit-area")?.value?.trim() || "", linkedinUrl: document.getElementById("edit-linkedinUrl")?.value?.trim() || "" };
+  const roleInput = document.getElementById("edit-role");
+  if (roleInput) safeFields.role = roleInput.value;
+  const updates = { updatedAt: serverTimestamp(), profileUpdatedAt: serverTimestamp(), profileUpdatedBy: state.user.uid };
+  Object.entries(safeFields).forEach(([key, value]) => { if ((row[key] || "") !== value) updates[key] = value; });
+  return updates;
+}
+function requesterLabel(r) { return nameOrId(r.requesterName || r.requesterDisplayName || r.createdByName || r.requesterId || r.userId || r.uid); }
+function approvalPill(u) { return `<span class="status ${u.isApproved === true ? "green" : "orange"}">${u.isApproved === true ? "APPROVED FOR COMMUNITY" : "NOT APPROVED FOR COMMUNITY"}</span>`; }
+function visibilityPill(u) { return `<span class="status ${isHidden(u) ? "orange" : "green"}">${isHidden(u) ? "HIDDEN FROM COMMUNITY" : "VISIBLE IN COMMUNITY"}</span>`; }
+function banPill(u) { return `<span class="status ${isBanned(u) ? "red" : "green"}">${isBanned(u) ? "BANNED" : "ACTIVE"}</span>`; }
+function banDetails(u) {
+  if (!isBanned(u)) return "Current account access status is active.";
+  return [`Reason: ${u.banReason || u.bannedReason || "Not recorded"}`, `Expiry: ${formatDate(u.banExpiresAt || u.bannedUntil || u.banExpiry)}`].join(" ");
+}
+function decisionLabel(value) { return ({ approved: "Accepted", changes_requested: "Needs Fix", unreviewed: "Unreviewed" })[value] || value; }
+function fieldLabel(value) { return ({ fullName: "Full Name", profilePicture: "Profile Picture", area: "Area", role: "Role" })[value] || value || "profile field"; }
+function communityStatusBlock(u) {
+  return `<section class="panel community-status"><h2>Community status</h2><div class="status-grid"><div><span>Verification</span>${statusPill(verificationLabel(u))}</div><div><span>Profile</span>${statusPill(profileComplete(u) ? "Complete" : "Incomplete")}</div><div><span>Community approval</span>${approvalPill(u)}</div><div><span>Visibility</span>${visibilityPill(u)}</div><div><span>Account</span>${banPill(u)}</div><div><span>Role</span><strong>${escapeHtml(roleLabel(u))}</strong></div></div></section>`;
+}
+function confirmationCopy(action, type, row, label, destructive) {
+  if (action === "close-request") return `Close this Seva request? Title: ${requestTitle(row)}. Requester: ${requesterLabel(row)}. Request ID: ${row.id}. Current status: ${row.status || "open"}. The request will no longer remain active and an admin audit log will be written.`;
+  if (action === "toggle-hidden") return `${isHidden(row) ? "Show this user in" : "Hide this user from"} the SayVah community? User: ${displayName(row)} (${row.id}).`;
+  if (action === "toggle-approved") return `${row.isApproved === true ? "Remove community approval for" : "Approve for community"} ${displayName(row)} (${row.id})?`;
+  if (action === "save-profile") return `Save safe profile edits for ${displayName(row)} (${row.id})? This will preserve auth credentials and write an admin audit log.`;
+  if (action === "toggle-banned") return `${isBanned(row) ? "Unban" : "Ban"} this user? User: ${displayName(row)} (${row.id}). This will create an admin audit log.`;
+  if (action === "revoke-verification") return `Revoke verification for ${displayName(row)} (${row.id})? The admin decision message will be sent as verificationReviewMessage.`;
+  if (action === "approve-verification") return "Approve this SayVah account? Approval notes stay in the audit log and verificationReviewMessage will be cleared.";
+  return `Please confirm you want to ${label}: ${detailTitle(type, row)} (${row.id}). This ${destructive ? "cannot be undone and" : ""} will create an admin audit log.`;
 }
 function profileComplete(u) { return Boolean((u.isProfileComplete ?? u.profileComplete) || (hasName(u) && profileImageUrl(u) && hasArea(u) && hasRole(u))); }
 function hasName(u) { return Boolean(displayName(u) && displayName(u) !== "Unknown user"); }
