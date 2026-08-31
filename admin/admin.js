@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
   query,
   where,
   orderBy,
@@ -21,6 +22,7 @@ import {
   deleteDoc,
   addDoc,
   serverTimestamp,
+  deleteField,
   getCountFromServer,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -80,6 +82,7 @@ const navItems = [
   ["organisations", "Organisations", "◇"],
   ["launch", "Launch Signups", "+"],
   ["qa", "Community Q&A", "?"],
+  ["admin-rajan", "Admin - Rajan", "A"],
   ["system", "System", "⚙"]
 ];
 
@@ -276,6 +279,7 @@ async function renderPage(page) {
     if (page === "organisations") return renderSimpleCollection("organisations");
     if (page === "launch") return renderLaunchSignups();
     if (page === "qa") return renderCommunityQuestions();
+    if (page === "admin-rajan") return renderAdminRajan();
     if (page === "system") return renderSystem();
   } catch (error) {
     setContent(errorPanel(error));
@@ -343,6 +347,7 @@ async function renderUsersModule(mode) {
   const key = mode;
   const useQuickTabs = true;
   let rows = (await safeGet(COLLECTIONS.users, ["createdAt", "desc"], 300)).rows;
+  rows = await attachTrustProfiles(rows);
   if (mode === "sevadaars") rows = rows.filter(isSevadaar);
   if (mode === "requesters") rows = rows.filter(isRequester);
   if (mode === "both") rows = rows.filter(isBothRole);
@@ -634,7 +639,7 @@ function bindUserToolbar(key) {
   });
 }
 function requestTable(rows) { return genericTable(rows, ["Request", "Requester", "Area", "Status", "Created"], requestCells); }
-function userTable(rows) { return genericTable(rows, ["User", "UID", "Role", "Area", "Verification"], userCells); }
+function userTable(rows) { return genericTable(rows, ["User", "Role", "Area", "Rating", "Helps", "Reports", "Verification", "Visibility"], userCells); }
 function genericTable(rows, headers, cellFn) {
   if (!rows.length) return `<div class="empty">No records found.</div>`;
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr data-record-id="${escapeAttr(row.id)}">${cellFn(row)}</tr>`).join("")}</tbody></table></div>`;
@@ -644,7 +649,7 @@ function bindRecordClicks(rows, type) {
   document.querySelectorAll("[data-record-id]").forEach((node) => node.addEventListener("click", () => openDetail(type, rows.find((row) => row.id === node.dataset.recordId))));
 }
 function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(requesterLabel(r))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}<br><button class="soft-button table-action" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></td>`; }
-function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(roleLabel(u))}</td><td>${escapeHtml(areaOf(u))}</td><td><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}<span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span></div></td>`; }
+function userCells(u) { const trust = trustProfile(u); return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span><br><span class="muted">UID: ${escapeHtml(u.id)}</span></div></div></td><td>${escapeHtml(roleLabel(u))}</td><td>${escapeHtml(areaOf(u))}</td><td>${escapeHtml(ratingSummary(trust))}</td><td>${escapeHtml(`${trust.completedHelps.value} helps`)}</td><td>${escapeHtml(`${trust.reports.value} ${trust.reports.value === 1 ? "report" : "reports"}`)}</td><td>${statusPill(verificationState(u))}</td><td><div class="status-stack">${visibilityPill(u)}${banPill(u)}</div></td>`; }
 function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "No email")}</span><br><span class="muted">UID: ${escapeHtml(u.id)}</span><br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
 function chatCells(c) { return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`; }
 function reportCells(r) { return `<td>${escapeHtml(r.reason || r.type || r.id)}<br><span class="muted">${escapeHtml(r.description || "")}</span></td><td>${escapeHtml(nameOrId(r.reporterName || r.reporterId))}</td><td>${escapeHtml(nameOrId(r.reportedUserName || r.reportedUserId || r.userId))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt || r.timestamp)}</td>`; }
@@ -652,7 +657,7 @@ function orgCells(o) { return `<td>${escapeHtml(o.name || o.title || o.id)}</td>
 function signupCells(s) { return `<td>${escapeHtml(s.name || "Not provided")}</td><td><a href="mailto:${escapeAttr(s.email || "")}">${escapeHtml(s.email || "")}</a><br><button class="soft-button" type="button" data-copy-email="${escapeAttr(s.email || "")}">Copy email</button></td><td>${escapeHtml(s.area || "")}</td><td>${escapeHtml(s.interest || "")}</td><td>${statusPill(s.notificationEmailStatus || (s.notificationEmailSent ? "sent" : "pending"))}<br><span class="muted">${formatDate(s.notificationEmailSentAt)}</span></td>`; }
 function qaCells(q) { return `<td>${escapeHtml(q.question || q.title || q.id)}</td><td>${escapeHtml(nameOrId(q.submitterName || q.userId || q.uid))}</td><td>${statusPill(q.status || (q.approved ? "approved" : "pending"))}</td><td>${escapeHtml(q.answer || q.response || "")}</td>`; }
 function requestCard(r) { return `<article class="record-card" data-record-id="${escapeAttr(r.id)}"><h3>${escapeHtml(requestTitle(r))}</h3><dl><div><dt>ID</dt><dd>${escapeHtml(r.id)}</dd></div><div><dt>Requester</dt><dd>${escapeHtml(requesterLabel(r))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(r))}</dd></div><div><dt>Status</dt><dd>${escapeHtml(r.status || "unknown")}</dd></div><div><dt>Created</dt><dd>${formatDate(r.createdAt)}</dd></div></dl><div class="action-row"><button class="soft-button" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></div></article>`; }
-function userCard(u) { return `<article class="record-card" data-record-id="${escapeAttr(u.id)}"><div class="person-card-head">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p class="muted">${escapeHtml(u.email || "No email")}</p></div></div><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}</div><dl><div><dt>UID</dt><dd>${escapeHtml(u.id)}</dd></div><div><dt>Role</dt><dd>${escapeHtml(roleLabel(u))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(u))}</dd></div><div><dt>Approved</dt><dd>${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</dd></div></dl></article>`; }
+function userCard(u) { const trust = trustProfile(u); return `<article class="record-card" data-record-id="${escapeAttr(u.id)}"><div class="person-card-head">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p class="muted">${escapeHtml(u.email || "No email")}</p></div></div><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}</div><dl><div><dt>UID</dt><dd>${escapeHtml(u.id)}</dd></div><div><dt>Role</dt><dd>${escapeHtml(roleLabel(u))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(u))}</dd></div><div><dt>Rating</dt><dd>${escapeHtml(ratingSummary(trust))}</dd></div><div><dt>Helps</dt><dd>${escapeHtml(trust.completedHelps.value)}</dd></div><div><dt>Reports</dt><dd>${escapeHtml(trust.reports.value)}</dd></div><div><dt>Approved</dt><dd>${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</dd></div></dl></article>`; }
 function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>${escapeHtml(u.email || "No email")}</p><p>UID: ${escapeHtml(u.id)}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div><div class="status-stack">${statusPill(verificationLabel(u))}${visibilityPill(u)}${banPill(u)}</div></div></article>`; }
 function chatCard(c) { return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) }); }
 function reportCard(r) { return recordCard(r, r.reason || r.type || r.id, { Reporter: nameOrId(r.reporterName || r.reporterId), Reported: nameOrId(r.reportedUserName || r.reportedUserId || r.userId), Status: r.status || "unknown", Date: formatDate(r.createdAt || r.timestamp) }); }
@@ -664,6 +669,10 @@ function recordCard(row, title, fields) {
 }
 async function openDetail(type, row) {
   if (!row) return;
+  if (type === "user") {
+    row = await withCanonicalTrustProfile(row);
+    await migrateTrustOverridesIfNeeded(row);
+  }
   const actions = actionButtons(type, row);
   el.modalContent.innerHTML = `<h1 id="modal-title">${escapeHtml(detailTitle(type, row))}</h1><div class="detail-grid">${type === "user" ? userDetailSections(row) : detailSection("Overview", flatten(row))}${actions}</div>`;
   el.detailModal.hidden = false;
@@ -684,6 +693,7 @@ function actionButtons(type, row) {
   return `<div class="panel"><h2>Admin actions</h2><p class="muted">No safe write actions are enabled for this record until the production app schema is confirmed.</p></div>`;
 }
 function userDangerZone(row) {
+  if (row.id === state.user?.uid) return `<div class="panel danger-zone admin-danger"><h2>Protected admin actions</h2><p class="muted">Self-delete, self-ban, self-hide and own admin role removal are blocked for the currently signed-in admin account.</p></div>`;
   return `<div class="panel danger-zone admin-danger"><h2>Danger zone</h2><p class="muted">High-impact account administration controls.</p>
     <div class="danger-control"><div><strong>Community visibility</strong><p class="muted">Controls whether this member appears in community-facing areas.</p>${visibilityPill(row)}</div><button class="warning-button" data-action="toggle-hidden">${isHidden(row) ? "SHOW IN COMMUNITY" : "HIDE FROM COMMUNITY"}</button></div>
     <div class="danger-control"><div><strong>Community approval</strong><p class="muted">Controls the separate isApproved community approval state.</p>${approvalPill(row)}</div><button class="warning-button" data-action="toggle-approved">${row.isApproved === true ? "REMOVE COMMUNITY APPROVAL" : "APPROVE FOR COMMUNITY"}</button></div>
@@ -704,6 +714,10 @@ function bindActions(type, row) {
 }
 function confirmAction(action, type, row, field = "") {
   const reviewMessage = document.getElementById("review-message")?.value?.trim() || "";
+  if (action === "edit-trust-profile") return setTrustEditMode(row, true);
+  if (action === "cancel-trust-profile") return setTrustEditMode(row, false);
+  if (action === "save-trust-profile") return confirmTrustProfileSave(row);
+  if (action === "reset-trust-profile") return confirmTrustProfileReset(row);
   if ((action === "deny-verification" || action === "revoke-verification") && !reviewMessage) {
     showActionMessage("Please provide an admin decision message before continuing.");
     return;
@@ -736,6 +750,8 @@ function confirmAction(action, type, row, field = "") {
 }
 function confirmButtonClass(action) {
   if (action === "approve-verification") return "success-button";
+  if (action === "save-trust-profile") return "warning-button";
+  if (action === "reset-trust-profile") return "danger-button";
   if (action === "deny-verification" || action === "toggle-area" || action === "toggle-hidden" || action === "toggle-approved" || action === "save-profile" || action === "close-request") return "warning-button";
   if (action === "toggle-banned" || action === "revoke-verification" || action.startsWith("delete-")) return "danger-button";
   return "primary-button";
@@ -883,6 +899,217 @@ async function runAction(action, type, row, field = "") {
     showToast(failureMessage(action), "error");
   }
 }
+
+async function renderAdminRajan() {
+  const snap = await getDoc(doc(db, COLLECTIONS.users, state.user.uid));
+  let profile = snap.exists() ? { id: snap.id, ...snap.data() } : state.adminProfile;
+  profile = await withCanonicalTrustProfile(profile);
+  await migrateTrustOverridesIfNeeded(profile);
+  setContent(`
+    <section class="panel">
+      <div class="panel-head"><h2>Admin - Rajan</h2><span class="status green">Current authenticated admin</span></div>
+      <div class="detail-grid">
+        ${statusWarnings(profile)}
+        ${adminRajanAccount(profile)}
+        ${profileEditPanel(profile)}
+        ${adminStatusPanel(profile)}
+        ${trustProfilePanel(profile)}
+        ${detailSection("Activity", { Joined: formatDate(profile.createdAt), LastUpdated: formatDate(profile.updatedAt), VerificationRequested: formatDate(profile.verificationRequestedAt), VerificationReviewed: formatDate(profile.verificationReviewedAt), LastTrustProfileEdit: formatDate(profile.trustProfileUpdatedAt) })}
+      </div>
+    </section>
+  `);
+  bindActions("user", profile);
+}
+
+const TRUST_METRICS = [
+  { key: "ratingAverage", label: "Average Rating", min: 0, max: 5, step: "0.1", integer: false, legacy: ["averageRating", "avgRating", "ratingAverage"], overrideKey: "averageRating" },
+  { key: "ratingCount", label: "Rating Count", min: 0, step: "1", integer: true, legacy: ["ratingCount", "ratingsCount"], overrideKey: "ratingCount" },
+  { key: "completedHelps", label: "Completed Helps", min: 0, step: "1", integer: true, legacy: ["completedHelps"], overrideKey: "completedHelps" },
+  { key: "completedRequests", label: "Completed Requests", min: 0, step: "1", integer: true, legacy: ["completedRequests"], overrideKey: "completedRequests" },
+  { key: "reportCount", label: "Reports", min: 0, step: "1", integer: true, legacy: ["reportCount", "reports"], overrideKey: "reports" },
+  { key: "issueCount", label: "Issues", min: 0, step: "1", integer: true, legacy: ["issueCount", "issues"], overrideKey: "issues" }
+];
+const RESETTABLE_TRUST_KEYS = new Set(["ratingAverage", "ratingCount", "completedHelps", "completedRequests", "reportCount"]);
+
+async function attachTrustProfiles(rows) {
+  const trustRows = (await safeGet(COLLECTIONS.trustProfiles, ["updatedAt", "desc"], 500)).rows;
+  const byId = new Map(trustRows.map((row) => [row.id, row]));
+  return rows.map((row) => ({ ...row, __trustProfile: byId.get(row.id) || null }));
+}
+async function withCanonicalTrustProfile(row) {
+  try {
+    const snap = await getDoc(doc(db, COLLECTIONS.trustProfiles, row.id));
+    return { ...row, __trustProfile: snap.exists() ? { id: snap.id, ...snap.data() } : null };
+  } catch (error) {
+    console.error("Unable to load canonical trust profile.", error);
+    return row;
+  }
+}
+async function migrateTrustOverridesIfNeeded(row) {
+  if (row.trustOverridesMigratedAt) return;
+  const overrides = row.trustOverrides || {};
+  const entries = TRUST_METRICS.filter((metric) => Number.isFinite(Number(overrides[metric.overrideKey])));
+  if (!entries.length) return;
+  const trust = row.__trustProfile || {};
+  const updates = { userId: row.id, updatedAt: serverTimestamp(), trustProfileUpdatedAt: serverTimestamp(), trustProfileUpdatedBy: state.user.uid, trustProfileUpdateSource: "migration" };
+  const changes = {};
+  entries.forEach((metric) => {
+    const next = normalizedTrustNumber(Number(overrides[metric.overrideKey]), metric);
+    const previous = trustValue(row, metric, false);
+    updates[metric.key] = next;
+    updates[`trustProfileAdminAdjustments.${metric.key}`] = { adjustedAt: serverTimestamp(), adjustedBy: state.user.uid, source: "trustOverrides_migration" };
+    changes[metric.key] = { from: previous, to: next };
+  });
+  if ("ratingAverage" in updates || "ratingCount" in updates) {
+    const nextAverage = "ratingAverage" in updates ? updates.ratingAverage : trustValue(row, TRUST_METRICS[0], false);
+    const nextCount = "ratingCount" in updates ? updates.ratingCount : trustValue(row, TRUST_METRICS[1], false);
+    updates.ratingTotal = Math.round(nextAverage * nextCount);
+  }
+  await setDoc(doc(db, COLLECTIONS.trustProfiles, row.id), updates, { merge: true });
+  await updateDoc(doc(db, COLLECTIONS.users, row.id), { trustOverridesMigratedAt: serverTimestamp(), trustOverridesMigratedBy: state.user.uid });
+  await addDoc(collection(db, COLLECTIONS.audit), { adminUid: state.user.uid, action: "trust_profile_migrated", targetType: "user", targetId: row.id, timestamp: serverTimestamp(), changes });
+  row.__trustProfile = { ...(row.__trustProfile || {}), ...Object.fromEntries(entries.map((metric) => [metric.key, updates[metric.key]])) };
+}
+function trustProfile(u = {}) {
+  return Object.fromEntries(TRUST_METRICS.map((metric) => {
+    const value = trustValue(u, metric, true);
+    const adjusted = Boolean(u.__trustProfile?.trustProfileAdminAdjustments?.[metric.key]);
+    return [metric.key, { ...metric, value, adjusted }];
+  }));
+}
+function trustValue(u, metric, includeTemporaryOverrides) {
+  const canonical = u.__trustProfile || {};
+  if (Number.isFinite(Number(canonical[metric.key]))) return normalizedTrustNumber(Number(canonical[metric.key]), metric);
+  if (includeTemporaryOverrides && Number.isFinite(Number(u.trustOverrides?.[metric.overrideKey]))) return normalizedTrustNumber(Number(u.trustOverrides[metric.overrideKey]), metric);
+  const found = metric.legacy.find((key) => Number.isFinite(Number(u[key])));
+  return normalizedTrustNumber(found ? Number(u[found]) : 0, metric);
+}
+function normalizedTrustNumber(value, metric) { return metric.integer ? Math.trunc(value) : Math.round(value * 10) / 10; }
+function trustMetricLabel(key) { return TRUST_METRICS.find((metric) => metric.key === key)?.label || key; }
+function ratingSummary(trust) { return `${trust.ratingAverage.value.toFixed(1)} (${trust.ratingCount.value})${trust.ratingAverage.adjusted || trust.ratingCount.adjusted ? " *" : ""}`; }
+function trustProfilePanel(u) {
+  const trust = trustProfile(u);
+  const hasAdjustments = Object.values(trust).some((metric) => metric.adjusted);
+  const trustScore = Number.isFinite(Number(u.__trustProfile?.trustScore)) ? `<article class="trust-card"><span>Trust Score</span><strong>${escapeHtml(u.__trustProfile.trustScore)}</strong><small>Canonical trustProfiles field</small></article>` : "";
+  return `<section class="panel trust-profile-panel"><div class="panel-head"><h2>Trust Profile</h2>${hasAdjustments ? `<span class="status orange">ADMIN ADJUSTED</span>` : `<span class="status">Canonical data</span>`}</div><div id="action-message" class="form-message" aria-live="polite"></div><div class="trust-grid">${TRUST_METRICS.map((metric) => trustMetricCard(trust[metric.key])).join("")}${trustScore}</div><div class="action-row"><button class="warning-button" type="button" data-action="edit-trust-profile">EDIT TRUST PROFILE</button><button class="danger-button" type="button" data-action="reset-trust-profile">RESET TO SYSTEM VALUE</button></div></section>`;
+}
+function trustMetricCard(metric) { return `<article class="trust-card"><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.integer ? metric.value : metric.value.toFixed(1))}</strong><small>${metric.adjusted ? "Manually adjusted" : "Canonical system value"}</small></article>`; }
+function setTrustEditMode(row, editing) {
+  const panel = document.querySelector(".trust-profile-panel");
+  if (!panel) return;
+  panel.outerHTML = editing ? trustProfileEditPanel(row) : trustProfilePanel(row);
+  bindActions("user", row);
+}
+function trustProfileEditPanel(row) {
+  const trust = trustProfile(row);
+  return `<section class="panel trust-profile-panel"><div class="panel-head"><h2>Trust Profile</h2><span class="status orange">Edit mode</span></div><div id="action-message" class="form-message" aria-live="polite"></div><div class="trust-edit-grid">${TRUST_METRICS.map((metric) => `<div class="field"><label for="trust-${escapeAttr(metric.key)}">${escapeHtml(metric.label)}</label><input id="trust-${escapeAttr(metric.key)}" data-trust-input="${escapeAttr(metric.key)}" type="number" min="${metric.min}" ${metric.max === undefined ? "" : `max="${metric.max}"`} step="${metric.step}" value="${escapeAttr(trust[metric.key].value)}" /></div>`).join("")}</div><div class="action-row"><button class="secondary-button" type="button" data-action="cancel-trust-profile">Cancel</button><button class="warning-button" type="button" data-action="save-trust-profile">SAVE TRUST PROFILE</button></div></section>`;
+}
+function readTrustInputs() {
+  const values = {};
+  for (const metric of TRUST_METRICS) {
+    const raw = document.querySelector(`[data-trust-input="${CSS.escape(metric.key)}"]`)?.value;
+    if (raw === "" || raw === undefined) return { error: `${metric.label} is required.` };
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return { error: `${metric.label} must be a valid number.` };
+    if (metric.integer && !Number.isInteger(value)) return { error: `${metric.label} must be a whole number.` };
+    if (value < metric.min) return { error: `${metric.label} cannot be negative.` };
+    if (metric.max !== undefined && value > metric.max) return { error: `${metric.label} cannot be greater than ${metric.max}.` };
+    values[metric.key] = normalizedTrustNumber(value, metric);
+  }
+  return { values };
+}
+function confirmTrustProfileSave(row) {
+  const parsed = readTrustInputs();
+  if (parsed.error) { showActionMessage(parsed.error); return; }
+  const current = trustProfile(row);
+  const changes = {};
+  const updates = { userId: row.id, updatedAt: serverTimestamp(), trustProfileUpdatedAt: serverTimestamp(), trustProfileUpdatedBy: state.user.uid, trustProfileUpdateSource: "admin" };
+  TRUST_METRICS.forEach((metric) => {
+    const next = parsed.values[metric.key];
+    const previous = current[metric.key].value;
+    if (next !== previous) {
+      changes[metric.key] = { from: previous, to: next };
+      updates[metric.key] = next;
+      updates[`trustProfileAdminAdjustments.${metric.key}`] = { adjustedAt: serverTimestamp(), adjustedBy: state.user.uid };
+    }
+  });
+  if ("ratingAverage" in updates || "ratingCount" in updates) {
+    const nextAverage = "ratingAverage" in updates ? updates.ratingAverage : current.ratingAverage.value;
+    const nextCount = "ratingCount" in updates ? updates.ratingCount : current.ratingCount.value;
+    updates.ratingTotal = Math.round(nextAverage * nextCount);
+  }
+  if (!Object.keys(changes).length) { showActionMessage("No Trust Profile values changed."); return; }
+  el.confirmCopy.innerHTML = `<strong>Update Trust Profile?</strong><dl class="confirm-changes">${Object.entries(changes).map(([key, change]) => `<div><dt>${escapeHtml(trustMetricLabel(key))}</dt><dd>${escapeHtml(change.from)} -> ${escapeHtml(change.to)}</dd></div>`).join("")}</dl>`;
+  configureDeleteConfirmation(false);
+  el.confirmModal.hidden = false;
+  el.confirmSubmit.textContent = "Save Changes";
+  el.confirmSubmit.className = "warning-button";
+  el.confirmSubmit.disabled = false;
+  el.confirmSubmit.onclick = () => runTrustProfileUpdate(row, updates, changes, "trust_profile_updated");
+}
+async function confirmTrustProfileReset(row) {
+  try {
+    const system = await recalculateSystemTrustProfile(row.id);
+    const current = trustProfile(row);
+    const updates = { ...system.values, ratingTotal: system.ratingTotal, userId: row.id, updatedAt: serverTimestamp(), trustProfileUpdatedAt: serverTimestamp(), trustProfileUpdatedBy: state.user.uid, trustProfileUpdateSource: "system_reset" };
+    const changes = {};
+    TRUST_METRICS.filter((metric) => RESETTABLE_TRUST_KEYS.has(metric.key)).forEach((metric) => {
+      updates[`trustProfileAdminAdjustments.${metric.key}`] = deleteField();
+      const previous = current[metric.key].value;
+      const next = system.values[metric.key];
+      if (previous !== next) changes[metric.key] = { from: previous, to: next, reset: true };
+    });
+    if (!Object.keys(changes).length) changes.reset = { from: "admin adjustments", to: "system values", reset: true };
+    el.confirmCopy.innerHTML = `<strong>Reset Trust Profile to recalculated system values?</strong><p class="muted">Issues are manually administered because no reliable system source exists.</p><dl class="confirm-changes">${TRUST_METRICS.filter((metric) => RESETTABLE_TRUST_KEYS.has(metric.key)).map((metric) => `<div><dt>${escapeHtml(metric.label)}</dt><dd>${escapeHtml(current[metric.key].value)} -> ${escapeHtml(system.values[metric.key])}</dd></div>`).join("")}</dl>`;
+    configureDeleteConfirmation(false);
+    el.confirmModal.hidden = false;
+    el.confirmSubmit.textContent = "Reset to System Value";
+    el.confirmSubmit.className = "danger-button";
+    el.confirmSubmit.disabled = false;
+    el.confirmSubmit.onclick = () => runTrustProfileUpdate(row, updates, changes, "trust_profile_reset_to_system");
+  } catch (error) {
+    console.error("Unable to recalculate Trust Profile.", error);
+    showActionMessage("Unable to recalculate Trust Profile from source records.");
+  }
+}
+async function recalculateSystemTrustProfile(uid) {
+  const [ratingsSnap, reportsSnap, userReportsSnap, requesterRequestsSnap, helperRequestsSnap] = await Promise.all([
+    getDocs(query(collection(db, COLLECTIONS.ratings), where("toUserId", "==", uid), limit(500))).catch(() => null),
+    getDocs(query(collection(db, COLLECTIONS.reports), where("reportedUserId", "==", uid), limit(500))).catch(() => null),
+    getDocs(query(collection(db, "user_reports"), where("reportedUserId", "==", uid), limit(500))).catch(() => null),
+    getDocs(query(collection(db, COLLECTIONS.requests), where("requesterId", "==", uid), limit(500))).catch(() => null),
+    getDocs(query(collection(db, COLLECTIONS.requests), where("acceptedBy", "==", uid), limit(500))).catch(() => null)
+  ]);
+  const ratingDocs = ratingsSnap?.docs || [];
+  const ratingValues = ratingDocs.map((snap) => Number(snap.data().rating || snap.data().value || snap.data().score)).filter(Number.isFinite);
+  const ratingTotal = ratingValues.reduce((sum, value) => sum + value, 0);
+  const completedRequests = (requesterRequestsSnap?.docs || []).filter((snap) => statusGroup(snap.data().status || snap.data().requestStatus || snap.data().state) === "completed").length;
+  const completedHelps = (helperRequestsSnap?.docs || []).filter((snap) => statusGroup(snap.data().status || snap.data().requestStatus || snap.data().state) === "completed").length;
+  return { ratingTotal, values: { ratingAverage: ratingValues.length ? Math.round((ratingTotal / ratingValues.length) * 10) / 10 : 0, ratingCount: ratingValues.length, completedHelps, completedRequests, reportCount: (reportsSnap?.docs.length || 0) + (userReportsSnap?.docs.length || 0) } };
+}
+async function runTrustProfileUpdate(row, updates, changes, action) {
+  try {
+    await setDoc(doc(db, COLLECTIONS.trustProfiles, row.id), updates, { merge: true });
+    await addDoc(collection(db, COLLECTIONS.audit), { adminUid: state.user.uid, action, targetType: "user", targetId: row.id, timestamp: serverTimestamp(), changes });
+    state.cache.clear();
+    closeConfirm();
+    closeModal();
+    renderPage(state.page);
+    showToast(action === "trust_profile_reset_to_system" ? "Trust profile reset to system values." : "Trust profile updated.");
+  } catch (error) {
+    console.error("Unable to update trust profile.", error);
+    closeConfirm();
+    showActionMessage("Unable to update trust profile.");
+    showToast("Unable to update trust profile.", "error");
+  }
+}
+function adminRajanAccount(u) {
+  const linkedIn = validLinkedInUrl(u.linkedinUrl);
+  return `<section class="panel admin-profile-panel"><h2>Account</h2><div class="admin-profile-head">${profileImageUrl(u) ? `<img src="${escapeAttr(profileImageUrl(u))}" alt="" />` : avatar(u)}<dl><div><dt>Full name</dt><dd>${escapeHtml(displayName(u))}</dd></div><div><dt>Email</dt><dd>${escapeHtml(u.email || state.user.email || "Not recorded")}</dd></div><div><dt>UID</dt><dd>${escapeHtml(u.id || state.user.uid)}</dd></div><div><dt>Role</dt><dd>${escapeHtml(roleLabel(u))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(u))}</dd></div><div><dt>Organisation / Gurdwara</dt><dd>${escapeHtml(u.organisationName || u.organisationId || u.organizationName || u.organizationId || u.gurdwaraName || u.gurdwaraId || "Not recorded")}</dd></div><div><dt>LinkedIn</dt><dd>${linkedIn ? `<a href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a>` : "Not recorded"}</dd></div></dl></div></section>`;
+}
+function adminStatusPanel(u) {
+  return detailSection("Admin Status", { AdminRole: u.role === "admin" ? "admin" : "Not recorded", VerificationStatus: verificationLabel(u), CommunityApproval: u.isApproved === true ? "Approved" : u.isApproved === false ? "Not approved" : "Not recorded", Visibility: isHidden(u) ? "Hidden" : "Visible", BanStatus: isBanned(u) ? "Banned" : "Active", TempleAdmin: String(u.isTempleAdmin ?? "Not recorded") });
+}
 function showActionMessage(message) { const node = document.getElementById("action-message"); if (node) node.textContent = message; }
 function showToast(message, tone = "success") {
   if (!el.toast) {
@@ -943,6 +1170,7 @@ function userDetailSections(u) {
     + `<section class="panel profile-review"><h2>Profile picture</h2>${photo ? `<a class="profile-photo-button" href="${escapeAttr(photo)}" target="_blank" rel="noopener noreferrer"><img src="${escapeAttr(photo)}" alt="" /></a>` : `<div class="empty">Profile picture missing</div>`}</section>`
     + detailSection("Profile", { Name: displayName(u), Email: u.email || "Not recorded", UID: u.id, Role: roleLabel(u), Area: areaOf(u), LocationId: u.locationId || "Not recorded", LinkedIn: linkedIn ? "Provided" : "Not provided", Joined: formatDate(u.createdAt) })
     + profileEditPanel(u)
+    + trustProfilePanel(u)
     + `<section class="panel"><h2>LinkedIn</h2>${linkedIn ? `<a class="soft-button evidence-link" href="${escapeAttr(linkedIn)}" target="_blank" rel="noopener noreferrer">Open LinkedIn</a>` : `<div class="empty">Not provided</div>`}</section>`
     + detailSection("Verification", { isVerified: String(u.isVerified ?? "Not recorded"), verificationStatus: verificationLabel(u), verificationRequestedAt: formatDate(u.verificationRequestedAt), verificationReviewedAt: formatDate(u.verificationReviewedAt), verificationReviewedBy: u.verificationReviewedBy || "Not recorded", verificationReviewMessage: u.verificationReviewMessage || "Not recorded" })
     + profileChecklist(u)

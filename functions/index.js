@@ -171,6 +171,7 @@ exports.deleteUserPermanently = onCall(
     await runCleanupStep(partialFailures, "location_sessions", async () => deleteQueryMatches("location_sessions", ["userId", "uid"], targetUid, deletionStats));
     await runCleanupStep(partialFailures, "ratings", async () => anonymiseQueryMatches("ratings", ["fromUserId", "toUserId", "userId"], targetUid, deletionStats, { fromUserName: "Deleted User", toUserName: "Deleted User", userName: "Deleted User" }));
     await runCleanupStep(partialFailures, "reports", async () => anonymiseQueryMatches("reports", ["reporterId", "reportedUserId", "userId"], targetUid, deletionStats, { reporterName: "Deleted User", reportedUserName: "Deleted User", userName: "Deleted User" }));
+    await runCleanupStep(partialFailures, "trustProfiles", async () => deleteTrustProfile(targetUid, deletionStats));
     await runCleanupStep(partialFailures, "chats", async () => handleUserChats(targetUid, deletionStats));
     await runCleanupStep(partialFailures, "messages", async () => anonymiseMessages(targetUid, deletionStats));
     await runCleanupStep(partialFailures, "gurdwaras", async () => removeArrayReferences("gurdwaras", ["admins", "adminIds", "managedBy", "managerIds"], targetUid, deletionStats));
@@ -275,6 +276,7 @@ function isProtectedAdmin(user) {
 async function collectUserDependencies(uid, user = {}) {
   const counts = await linkedUserRecordCounts(uid);
   counts["users.profile"] = user && Object.keys(user).length ? 1 : 0;
+  counts["trustProfiles.profile"] = await documentExistsCount("trustProfiles", uid);
   counts["storage.ownedProfileFiles"] = ownedStoragePaths(uid, user).length;
   counts["messages.senderId"] = await collectionGroupCount("messages", "senderId", uid);
   counts["messages.uid"] = await collectionGroupCount("messages", "uid", uid);
@@ -284,6 +286,24 @@ async function collectUserDependencies(uid, user = {}) {
   return { counts, warnings };
 }
 
+
+async function documentExistsCount(collectionName, id) {
+  try {
+    const snap = await admin.firestore().collection(collectionName).doc(id).get();
+    return snap.exists ? 1 : 0;
+  } catch (error) {
+    logger.warn("Permanent user deletion document count failed.", { collectionName, id, message: error.message });
+    return -1;
+  }
+}
+
+async function deleteTrustProfile(uid, stats) {
+  const ref = admin.firestore().collection("trustProfiles").doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  await ref.delete();
+  stats.recordsDeleted += 1;
+}
 async function collectionGroupCount(collectionName, field, uid) {
   try {
     const snap = await admin.firestore().collectionGroup(collectionName).where(field, "==", uid).count().get();
