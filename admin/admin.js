@@ -718,6 +718,7 @@ function confirmAction(action, type, row, field = "") {
   if (action === "cancel-trust-profile") return setTrustEditMode(row, false);
   if (action === "save-trust-profile") return confirmTrustProfileSave(row);
   if (action === "reset-trust-profile") return confirmTrustProfileReset(row);
+  if (action === "reset-trust-score") return confirmTrustScoreReset(row);
   if ((action === "deny-verification" || action === "revoke-verification") && !reviewMessage) {
     showActionMessage("Please provide an admin decision message before continuing.");
     return;
@@ -927,7 +928,8 @@ const TRUST_METRICS = [
   { key: "completedHelps", label: "Completed Helps", min: 0, step: "1", integer: true, legacy: ["completedHelps"], overrideKey: "completedHelps" },
   { key: "completedRequests", label: "Completed Requests", min: 0, step: "1", integer: true, legacy: ["completedRequests"], overrideKey: "completedRequests" },
   { key: "reportCount", label: "Reports", min: 0, step: "1", integer: true, legacy: ["reportCount", "reports"], overrideKey: "reports" },
-  { key: "issueCount", label: "Issues", min: 0, step: "1", integer: true, legacy: ["issueCount", "issues"], overrideKey: "issues" }
+  { key: "issueCount", label: "Issues", min: 0, step: "1", integer: true, legacy: ["issueCount", "issues"], overrideKey: "issues" },
+  { key: "trustScore", label: "Trust Score", min: 0, max: 100, step: "1", integer: true, legacy: ["trustScore"], overrideKey: "trustScore" }
 ];
 const RESETTABLE_TRUST_KEYS = new Set(["ratingAverage", "ratingCount", "completedHelps", "completedRequests", "reportCount"]);
 
@@ -990,10 +992,10 @@ function ratingSummary(trust) { return `${trust.ratingAverage.value.toFixed(1)} 
 function trustProfilePanel(u) {
   const trust = trustProfile(u);
   const hasAdjustments = Object.values(trust).some((metric) => metric.adjusted);
-  const trustScore = Number.isFinite(Number(u.__trustProfile?.trustScore)) ? `<article class="trust-card"><span>Trust Score</span><strong>${escapeHtml(u.__trustProfile.trustScore)}</strong><small>Canonical trustProfiles field</small></article>` : "";
-  return `<section class="panel trust-profile-panel"><div class="panel-head"><h2>Trust Profile</h2>${hasAdjustments ? `<span class="status orange">ADMIN ADJUSTED</span>` : `<span class="status">Canonical data</span>`}</div><div id="action-message" class="form-message" aria-live="polite"></div><div class="trust-grid">${TRUST_METRICS.map((metric) => trustMetricCard(trust[metric.key])).join("")}${trustScore}</div><div class="action-row"><button class="warning-button" type="button" data-action="edit-trust-profile">EDIT TRUST PROFILE</button><button class="danger-button" type="button" data-action="reset-trust-profile">RESET TO SYSTEM VALUE</button></div></section>`;
+  const trustScoreAdjusted = Boolean(trust.trustScore?.adjusted);
+  return `<section class="panel trust-profile-panel"><div class="panel-head"><h2>Trust Profile</h2>${hasAdjustments ? `<span class="status orange">ADMIN ADJUSTED</span>` : `<span class="status">Canonical data</span>`}</div><div id="action-message" class="form-message" aria-live="polite"></div><div class="trust-grid">${TRUST_METRICS.map((metric) => trustMetricCard(trust[metric.key])).join("")}</div><div class="action-row"><button class="warning-button" type="button" data-action="edit-trust-profile">EDIT TRUST PROFILE</button><button class="danger-button" type="button" data-action="reset-trust-profile">RESET TO SYSTEM VALUE</button>${trustScoreAdjusted ? `<button class="danger-button" type="button" data-action="reset-trust-score">RESET TRUST SCORE TO SYSTEM</button>` : ""}</div></section>`;
 }
-function trustMetricCard(metric) { return `<article class="trust-card"><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.integer ? metric.value : metric.value.toFixed(1))}</strong><small>${metric.adjusted ? "Manually adjusted" : "Canonical system value"}</small></article>`; }
+function trustMetricCard(metric) { return `<article class="trust-card"><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.integer ? metric.value : metric.value.toFixed(1))}</strong><small>${metric.adjusted ? "Manually adjusted" : "Canonical value"}</small></article>`; }
 function setTrustEditMode(row, editing) {
   const panel = document.querySelector(".trust-profile-panel");
   if (!panel) return;
@@ -1036,8 +1038,9 @@ function confirmTrustProfileSave(row) {
   if ("ratingAverage" in updates || "ratingCount" in updates) {
     const nextAverage = "ratingAverage" in updates ? updates.ratingAverage : current.ratingAverage.value;
     const nextCount = "ratingCount" in updates ? updates.ratingCount : current.ratingCount.value;
-    updates.ratingTotal = Math.round(nextAverage * nextCount);
+    updates.ratingTotal = nextCount === 0 ? 0 : Math.round(nextAverage * nextCount);
   }
+  if ("trustScore" in updates) updates.badgeLevel = badgeFromTrustScore(updates.trustScore);
   if (!Object.keys(changes).length) { showActionMessage("No Trust Profile values changed."); return; }
   el.confirmCopy.innerHTML = `<strong>Update Trust Profile?</strong><dl class="confirm-changes">${Object.entries(changes).map(([key, change]) => `<div><dt>${escapeHtml(trustMetricLabel(key))}</dt><dd>${escapeHtml(change.from)} -> ${escapeHtml(change.to)}</dd></div>`).join("")}</dl>`;
   configureDeleteConfirmation(false);
@@ -1071,6 +1074,59 @@ async function confirmTrustProfileReset(row) {
     console.error("Unable to recalculate Trust Profile.", error);
     showActionMessage("Unable to recalculate Trust Profile from source records.");
   }
+}
+function confirmTrustScoreReset(row) {
+  const trust = row.__trustProfile || {};
+  if (!trust.trustProfileAdminAdjustments?.trustScore) { showActionMessage("Trust Score has not been manually adjusted."); return; }
+  const nextScore = calculateSystemTrustScore(trust);
+  const current = trustProfile(row).trustScore.value;
+  const updates = {
+    trustScore: nextScore,
+    badgeLevel: badgeFromTrustScore(nextScore),
+    "trustProfileAdminAdjustments.trustScore": deleteField(),
+    userId: row.id,
+    updatedAt: serverTimestamp(),
+    trustProfileUpdatedAt: serverTimestamp(),
+    trustProfileUpdatedBy: state.user.uid,
+    trustProfileUpdateSource: "trust_score_system_reset"
+  };
+  const changes = { trustScore: { from: current, to: nextScore, reset: true } };
+  el.confirmCopy.innerHTML = `<strong>Reset Trust Score to System?</strong><dl class="confirm-changes"><div><dt>Trust Score</dt><dd>${escapeHtml(current)} -> ${escapeHtml(nextScore)}</dd></div></dl>`;
+  configureDeleteConfirmation(false);
+  el.confirmModal.hidden = false;
+  el.confirmSubmit.textContent = "Reset Trust Score";
+  el.confirmSubmit.className = "danger-button";
+  el.confirmSubmit.disabled = false;
+  el.confirmSubmit.onclick = () => runTrustProfileUpdate(row, updates, changes, "trust_score_reset_to_system");
+}
+function calculateSystemTrustScore(data = {}) {
+  let score = 50;
+  if (data.emailVerified) score += 5;
+  if (data.phoneVerified) score += 10;
+  if (data.photoVerified) score += 5;
+  if (data.idVerified) score += 15;
+  if (data.backgroundCheckVerified) score += 15;
+  const completedTotal = Number(data.completedRequests || 0) + Number(data.completedHelps || 0);
+  if (completedTotal > 0) score += 5 + completedTotal * 2;
+  const ratingAverage = Number(data.ratingAverage || 0);
+  const ratingCount = Number(data.ratingCount || 0);
+  if (ratingCount >= 3) {
+    if (ratingAverage >= 4.8) score += 15;
+    else if (ratingAverage >= 4.5) score += 12;
+    else if (ratingAverage >= 4.0) score += 8;
+    else if (ratingAverage >= 3.0) score += 3;
+    else if (ratingAverage > 0) score -= 8;
+  }
+  score -= Number(data.cancelCount || 0) * 5;
+  score -= Number(data.noShowCount || 0) * 10;
+  score -= Number(data.reportCount || 0) * 15;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+function badgeFromTrustScore(score) {
+  if (score >= 80) return "highly_trusted";
+  if (score >= 60) return "trusted";
+  if (score >= 40) return "basic";
+  return "new";
 }
 async function recalculateSystemTrustProfile(uid) {
   const [ratingsSnap, reportsSnap, userReportsSnap, requesterRequestsSnap, helperRequestsSnap] = await Promise.all([
