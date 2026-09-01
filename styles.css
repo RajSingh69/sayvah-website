@@ -53,6 +53,14 @@ img { display:block; max-width:100%; }
 .button { min-height:52px; padding:0 22px; border-radius:15px; display:inline-flex; align-items:center; justify-content:center; font-weight:800; border:1px solid transparent; cursor:pointer; }
 .button-primary { color:#101010; background:linear-gradient(135deg,var(--saffron-soft),var(--saffron)); box-shadow:0 14px 34px rgba(245,160,0,.17); }
 .button-secondary { color:#e9fbff; border-color:rgba(85,217,239,.3); background:rgba(85,217,239,.09); }
+.button-download-pulse { position:relative; gap:9px; color:#080b0f; background:linear-gradient(135deg,#ffe18a 0%,var(--saffron-soft) 38%,var(--saffron) 100%); border-color:rgba(255,219,112,.82); font-weight:900; box-shadow:0 17px 42px rgba(245,160,0,.31), 0 0 0 1px rgba(255,255,255,.18) inset; isolation:isolate; transition:transform .22s ease, box-shadow .22s ease, filter .22s ease; }
+.button-download-pulse::after { content:""; position:absolute; inset:-8px; z-index:-1; border-radius:20px; border:1px solid rgba(255,193,67,.52); box-shadow:0 0 25px rgba(245,160,0,.38); animation:goldenPulse 2.6s ease-out infinite; }
+.button-download-pulse:hover { transform:translateY(-2px); box-shadow:0 23px 54px rgba(245,160,0,.43), 0 0 0 1px rgba(255,255,255,.24) inset; filter:saturate(1.08); }
+.button-download-pulse:hover::after { box-shadow:0 0 35px rgba(245,160,0,.58); border-color:rgba(255,215,108,.72); }
+.download-icon { position:relative; width:18px; height:18px; border:2px solid #080b0f; border-top:0; border-radius:0 0 5px 5px; flex:0 0 auto; }
+.download-icon::before { content:""; position:absolute; left:6px; top:-7px; width:2px; height:13px; background:#080b0f; border-radius:2px; }
+.download-icon::after { content:""; position:absolute; left:3px; top:1px; width:8px; height:8px; border-right:2px solid #080b0f; border-bottom:2px solid #080b0f; transform:rotate(45deg); }
+@keyframes goldenPulse { 0% { opacity:.72; transform:scale(.96); } 70% { opacity:0; transform:scale(1.16); } 100% { opacity:0; transform:scale(1.16); } }
 .hero-trust { display:flex; gap:18px; flex-wrap:wrap; color:#9fb0c0; font-size:13px; }
 .hero-visual { position:relative; min-height:640px; }
 .phone { position:absolute; border-radius:38px; overflow:hidden; border:1px solid #31506c; background:#091522; padding:7px; box-shadow:0 35px 80px rgba(0,0,0,.42); }
@@ -167,11 +175,12 @@ img { display:block; max-width:100%; }
 .accordion article > div { max-height:0; overflow:hidden; transition:max-height .28s ease; }
 .accordion article > div p { padding:0 20px 20px; margin:0; color:var(--muted); }
 .accordion article.open > div { max-height:240px; }
-.download-section { padding-top:76px; }
-.download-card { border-radius:30px; border:1px solid rgba(245,160,0,.35); background:linear-gradient(135deg,rgba(245,160,0,.13),rgba(14,32,49,.92) 40%,rgba(43,183,228,.08)); padding:42px; display:grid; grid-template-columns:1fr auto; gap:34px; align-items:center; box-shadow:var(--shadow); }
-.download-actions { display:flex; gap:10px; }
-.store-button { min-width:165px; padding:13px 17px; border-radius:14px; border:1px solid #354d62; background:#07111d; display:flex; flex-direction:column; line-height:1.15; }
-.store-button small { color:#93a6b7; font-size:10px; }.store-button strong { font-size:17px; }
+.download-section { padding-top:76px; scroll-margin-top:96px; }
+.download-card { border-radius:30px; border:1px solid rgba(245,160,0,.68); background:linear-gradient(135deg,rgba(245,160,0,.20) 0%,rgba(12,27,43,.98) 35%,rgba(6,17,31,.96) 68%,rgba(43,183,228,.12) 100%); padding:56px; display:grid; grid-template-columns:1fr auto; gap:44px; align-items:center; box-shadow:0 28px 80px rgba(0,0,0,.38), 0 0 44px rgba(245,160,0,.18); position:relative; overflow:hidden; scroll-margin-top:110px; }
+.download-card h2 { font-size:clamp(38px,4.6vw,62px); font-weight:900; max-width:720px; }
+.download-actions { display:flex; gap:14px; flex-wrap:wrap; justify-content:flex-end; }
+.store-button { min-width:176px; padding:16px 19px; border-radius:16px; border:1px solid #354d62; background:#07111d; display:flex; flex-direction:column; line-height:1.15; color:#fff; transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
+.store-button small { color:rgba(255,255,255,.76); font-size:10px; }.store-button strong { font-size:18px; }.store-button:hover { transform:translateY(-2px); }.store-button-apple { border-color:rgba(255,95,95,.55); background:linear-gradient(145deg,#841d28,#3e0812); box-shadow:0 16px 35px rgba(132,29,40,.28), 0 0 0 1px rgba(255,255,255,.08) inset; }.store-button-apple:hover { border-color:rgba(255,126,126,.78); box-shadow:0 20px 45px rgba(132,29,40,.38), 0 0 20px rgba(255,72,72,.20); }.store-button-google { border-color:rgba(78,166,255,.58); background:linear-gradient(145deg,#1761b9,#082b62); box-shadow:0 16px 35px rgba(23,97,185,.27), 0 0 0 1px rgba(255,255,255,.08) inset; }.store-button-google:hover { border-color:rgba(105,187,255,.82); box-shadow:0 20px 45px rgba(23,97,185,.38), 0 0 20px rgba(76,170,255,.20); }
 .contact-grid { display:grid; grid-template-columns:.85fr 1.15fr; gap:70px; }
 .contact-note { margin-top:30px; padding:20px; border-radius:18px; background:rgba(85,217,239,.06); border:1px solid rgba(85,217,239,.18); }
 .contact-note p { color:var(--muted); margin-bottom:0; }
@@ -249,7 +258,7 @@ img { display:block; max-width:100%; }
   .ring-three { width:300px; height:300px; }
   .ring-two { width:220px; height:220px; }
   .pin-a { top:30px; right:65px; }.pin-b { right:2px; top:145px; }.pin-c { bottom:30px; left:55px; }.pin-d { top:148px; left:0; }
-  .download-card { padding:28px 22px; }
+  .download-card { padding:34px 24px; }
   .download-actions { flex-direction:column; }
   .store-button { width:100%; }
   .contact-form { padding:20px; }
@@ -263,7 +272,7 @@ img { display:block; max-width:100%; }
   .phone-secondary { width:145px; height:314px; }
   .stats-card { grid-template-columns:1fr; }
 }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } * { transition:none !important; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } * { transition:none !important; } .button-download-pulse::after { animation:none !important; opacity:.42; transform:none; } }
 
 .live-locations {
   display: grid;
