@@ -413,16 +413,18 @@ function renderVerificationContent() {
 }
 async function renderChats() {
   const rows = (await safeGet(COLLECTIONS.chats, ["updatedAt", "desc"], 150)).rows;
+  const enrichedRows = await enrichSupportChats(rows);
+  const filtered = filterChats(enrichedRows);
   setContent(`
-    ${tabbar("chats", ["all", "personal", "community", "active", "archived"], state.filters.chats || "all")}
+    ${tabbar("chats", ["all", "personal", "community", "support", "active", "archived"], state.filters.chats || "all")}
     <section class="panel">
-      <div class="panel-head"><h2>Chat oversight</h2><span class="muted">Read-only moderation view</span></div>
-      ${genericTable(filterChats(rows), ["Chat", "Participants", "Linked request", "Last activity"], chatCells)}
-      ${cards(filterChats(rows), chatCard)}
+      <div class="panel-head"><h2>Chat oversight</h2><span class="muted">Read-only moderation view. Support chats can be answered by SayVah Support.</span></div>
+      ${genericTable(filtered, ["Chat", "Participants", "Linked request", "Last activity"], chatCells)}
+      ${cards(filtered, chatCard)}
     </section>
   `);
   bindTabs("chats");
-  bindRecordClicks(rows, "chat");
+  bindRecordClicks(filtered, "chat");
 }
 
 async function renderReports() {
@@ -643,10 +645,50 @@ function cards(rows, cardFn) { return `<div class="record-grid mobile-cards">${r
 function bindRecordClicks(rows, type) {
   document.querySelectorAll("[data-record-id]").forEach((node) => node.addEventListener("click", () => openDetail(type, rows.find((row) => row.id === node.dataset.recordId))));
 }
+function isSupportChat(row = {}) { return row.type === "support"; }
+async function enrichSupportChats(rows) {
+  const supportIds = [...new Set(rows.filter(isSupportChat).map((row) => row.supportUserId).filter(Boolean))];
+  const users = new Map();
+  await Promise.all(supportIds.map(async (uid) => {
+    try {
+      const snap = await getDoc(doc(db, COLLECTIONS.users, uid));
+      if (snap.exists()) users.set(uid, { id: snap.id, ...snap.data() });
+    } catch (error) {
+      console.error("Unable to resolve support chat user", { uid, error });
+    }
+  }));
+  return rows.map((row) => isSupportChat(row) ? { ...row, supportUser: users.get(row.supportUserId) || null } : row);
+}
+function supportUser(row = {}) { return row.supportUser || null; }
+function supportUserName(row = {}) {
+  const user = supportUser(row);
+  return user ? displayName(user) : (row.supportUserId ? "Unknown support user" : "Support user not recorded");
+}
+function supportUserMeta(row = {}) {
+  const user = supportUser(row);
+  return user ? `${areaOf(user)} - ${verificationLabel(user)}` : "User profile unavailable";
+}
+function supportUserSummary(row = {}) {
+  const user = supportUser(row);
+  if (!isSupportChat(row)) return "";
+  return `<section class="panel support-user-panel"><div class="support-user-summary">${user ? avatar(user) : `<span class="avatar">?</span>`}<div><h2>${escapeHtml(supportUserName(row))}</h2><p class="muted">${escapeHtml(areaOf(user || {}))}</p><div class="status-stack">${user ? statusPill(verificationLabel(user)) : statusPill("unavailable")}</div></div></div></section>`;
+}
+function supportMessageSenderName(message, row) {
+  const senderId = String(message.senderId || message.fromUserId || message.userId || "");
+  if (isSupportChat(row) && senderId === "support_team") return "SayVah Support";
+  if (isSupportChat(row) && senderId === row.supportUserId) return supportUserName(row);
+  return message.senderName || senderId || message.uid || "System";
+}
 function requestCells(r) { return `<td>${escapeHtml(requestTitle(r))}<br><span class="muted">${r.id}</span></td><td>${escapeHtml(requesterLabel(r))}</td><td>${escapeHtml(areaOf(r))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt)}<br><button class="soft-button table-action" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></td>`; }
 function userCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "")}</span></div></div></td><td>${escapeHtml(u.id)}</td><td>${escapeHtml(roleLabel(u))}</td><td>${escapeHtml(areaOf(u))}</td><td><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}<span class="muted">Approved: ${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</span></div></td>`; }
 function verificationCells(u) { return `<td><div class="person-cell">${avatar(u)}<div>${escapeHtml(displayName(u))}<br><span class="muted">${escapeHtml(u.email || "No email")}</span><br><span class="muted">UID: ${escapeHtml(u.id)}</span><br><span class="muted">${escapeHtml(roleLabel(u))}</span></div></div></td><td>${escapeHtml(areaOf(u))}</td><td>${statusPill(verificationLabel(u))}</td><td>${formatDate(u.verificationRequestedAt)}</td><td>${formatDate(u.verificationReviewedAt)}</td>`; }
-function chatCells(c) { return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`; }
+function chatCells(c) {
+  if (isSupportChat(c)) {
+    const user = supportUser(c);
+    return `<td><div class="person-cell support-person-cell">${user ? avatar(user) : `<span class="avatar">?</span>`}<div>${escapeHtml(supportUserName(c))}<br><span class="muted">${escapeHtml(supportUserMeta(c))}</span><br>${statusPill(verificationLabel(user || {}))}</div></div></td><td>${escapeHtml(user ? displayName(user) : "Profile unavailable")}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Support")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`;
+  }
+  return `<td>${escapeHtml(c.title || c.id)}</td><td>${escapeHtml(list(c.participants || c.participantIds || c.users))}</td><td>${escapeHtml(c.requestId || c.linkedRequestId || "Not linked")}</td><td>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}<br><span class="muted">${escapeHtml(c.lastMessagePreview || c.lastMessage || "")}</span></td>`;
+}
 function reportCells(r) { return `<td>${escapeHtml(r.reason || r.type || r.id)}<br><span class="muted">${escapeHtml(r.description || "")}</span></td><td>${escapeHtml(nameOrId(r.reporterName || r.reporterId))}</td><td>${escapeHtml(nameOrId(r.reportedUserName || r.reportedUserId || r.userId))}</td><td>${statusPill(r.status)}</td><td>${formatDate(r.createdAt || r.timestamp)}</td>`; }
 function orgCells(o) { return `<td>${escapeHtml(o.name || o.title || o.id)}</td><td>${escapeHtml(areaOf(o) || o.location || "")}</td><td>${statusPill(o.active === false ? "inactive" : (o.status || "active"))}</td><td>${escapeHtml(list(o.admins || o.adminIds || o.managedBy))}</td><td>${formatDate(o.updatedAt || o.createdAt)}</td>`; }
 function signupCells(s) { return `<td>${escapeHtml(s.name || "Not provided")}</td><td><a href="mailto:${escapeAttr(s.email || "")}">${escapeHtml(s.email || "")}</a><br><button class="soft-button" type="button" data-copy-email="${escapeAttr(s.email || "")}">Copy email</button></td><td>${escapeHtml(s.area || "")}</td><td>${escapeHtml(s.interest || "")}</td><td>${statusPill(s.notificationEmailStatus || (s.notificationEmailSent ? "sent" : "pending"))}<br><span class="muted">${formatDate(s.notificationEmailSentAt)}</span></td>`; }
@@ -654,7 +696,13 @@ function qaCells(q) { return `<td>${escapeHtml(q.question || q.title || q.id)}</
 function requestCard(r) { return `<article class="record-card" data-record-id="${escapeAttr(r.id)}"><h3>${escapeHtml(requestTitle(r))}</h3><dl><div><dt>ID</dt><dd>${escapeHtml(r.id)}</dd></div><div><dt>Requester</dt><dd>${escapeHtml(requesterLabel(r))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(r))}</dd></div><div><dt>Status</dt><dd>${escapeHtml(r.status || "unknown")}</dd></div><div><dt>Created</dt><dd>${formatDate(r.createdAt)}</dd></div></dl><div class="action-row"><button class="soft-button" type="button" data-record-id="${escapeAttr(r.id)}">Manage</button></div></article>`; }
 function userCard(u) { return `<article class="record-card" data-record-id="${escapeAttr(u.id)}"><div class="person-card-head">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p class="muted">${escapeHtml(u.email || "No email")}</p></div></div><div class="status-stack">${statusPill(verificationState(u))}${visibilityPill(u)}${banPill(u)}</div><dl><div><dt>UID</dt><dd>${escapeHtml(u.id)}</dd></div><div><dt>Role</dt><dd>${escapeHtml(roleLabel(u))}</dd></div><div><dt>Area</dt><dd>${escapeHtml(areaOf(u))}</dd></div><div><dt>Approved</dt><dd>${u.isApproved === true ? "Yes" : u.isApproved === false ? "No" : "Not recorded"}</dd></div></dl></article>`; }
 function verificationCard(u) { return `<article class="record-card verification-card" data-record-id="${escapeAttr(u.id)}"><div class="verification-summary">${avatar(u)}<div><h3>${escapeHtml(displayName(u))}</h3><p>${escapeHtml(roleLabel(u))}</p><p>${escapeHtml(areaOf(u))}</p><p>${escapeHtml(u.email || "No email")}</p><p>UID: ${escapeHtml(u.id)}</p><p>Submitted: ${formatDate(u.verificationRequestedAt)}</p></div><div class="status-stack">${statusPill(verificationLabel(u))}${visibilityPill(u)}${banPill(u)}</div></div></article>`; }
-function chatCard(c) { return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) }); }
+function chatCard(c) {
+  if (isSupportChat(c)) {
+    const user = supportUser(c);
+    return `<article class="record-card support-chat-card" data-record-id="${escapeAttr(c.id)}"><div class="person-card-head">${user ? avatar(user) : `<span class="avatar">?</span>`}<div><h3>${escapeHtml(supportUserName(c))}</h3><p class="muted">${escapeHtml(supportUserMeta(c))}</p></div></div><div class="status-stack">${statusPill(verificationLabel(user || {}))}</div><dl><div><dt>Last message</dt><dd>${escapeHtml(c.lastMessagePreview || c.lastMessage || "No messages yet")}</dd></div><div><dt>Last activity</dt><dd>${formatDate(c.lastMessageAt || c.updatedAt || c.createdAt)}</dd></div></dl></article>`;
+  }
+  return recordCard(c, c.title || c.id, { Participants: list(c.participants || c.participantIds || c.users), Request: c.requestId || "Not linked", Updated: formatDate(c.lastMessageAt || c.updatedAt) });
+}
 function reportCard(r) { return recordCard(r, r.reason || r.type || r.id, { Reporter: nameOrId(r.reporterName || r.reporterId), Reported: nameOrId(r.reportedUserName || r.reportedUserId || r.userId), Status: r.status || "unknown", Date: formatDate(r.createdAt || r.timestamp) }); }
 function orgCard(o) { return recordCard(o, o.name || o.title || o.id, { Area: areaOf(o) || o.location || "", Status: o.active === false ? "inactive" : (o.status || "active"), Admins: list(o.admins || o.adminIds || o.managedBy) }); }
 function signupCard(s) { return `<article class="record-card" data-record-id="${escapeAttr(s.id)}"><h3>${escapeHtml(s.name || "Signup")}</h3><dl><div><dt>Email</dt><dd><a href="mailto:${escapeAttr(s.email || "")}">${escapeHtml(s.email || "")}</a></dd></div><div><dt>Area</dt><dd>${escapeHtml(s.area || "")}</dd></div><div><dt>Interest</dt><dd>${escapeHtml(s.interest || "")}</dd></div><div><dt>Notification</dt><dd>${escapeHtml(s.notificationEmailStatus || (s.notificationEmailSent ? "sent" : "pending"))}</dd></div></dl><div class="action-row"><button class="soft-button" type="button" data-copy-email="${escapeAttr(s.email || "")}">Copy email</button></div></article>`; }
@@ -668,7 +716,7 @@ async function openDetail(type, row) {
   el.modalContent.innerHTML = `<h1 id="modal-title">${escapeHtml(detailTitle(type, row))}</h1><div class="detail-grid">${type === "user" ? userDetailSections(row) : detailSection("Overview", flatten(row))}${actions}</div>`;
   el.detailModal.hidden = false;
   bindActions(type, row);
-  if (type === "chat") await appendChatMessages(row.id);
+  if (type === "chat") await appendChatMessages(row.id, row);
 }
 function closeModal() { el.detailModal.hidden = true; }
 function actionButtons(type, row) {
@@ -901,20 +949,70 @@ function successMessage(action) {
 function failureMessage(action) {
   return ({ "approve-verification": "Approval failed.", "deny-verification": "Unable to request changes.", "delete-launch-signup": "Unable to delete launch signup.", "delete-community-question": "Unable to delete community question." })[action] || "Unable to complete action.";
 }
-async function appendChatMessages(chatId) {
+async function appendChatMessages(chatId, row = {}) {
   const shell = el.modalContent.querySelector(".detail-grid");
   if (!shell) return;
+  if (isSupportChat(row)) shell.insertAdjacentHTML("afterbegin", supportUserSummary(row));
   const panel = document.createElement("section");
-  panel.className = "panel";
+  panel.className = isSupportChat(row) ? "panel support-conversation-panel" : "panel";
   panel.innerHTML = "<h2>Message history</h2><div class=\"empty\">Loading messages...</div>";
   shell.appendChild(panel);
   try {
-    const snap = await getDocs(query(collection(db, COLLECTIONS.chats, chatId, "messages"), orderBy("createdAt", "asc"), limit(100)));
+    const messageQuery = isSupportChat(row)
+      ? query(collection(db, COLLECTIONS.chats, chatId, "messages"), orderBy("createdAt", "asc"))
+      : query(collection(db, COLLECTIONS.chats, chatId, "messages"), orderBy("createdAt", "asc"), limit(100));
+    const snap = await getDocs(messageQuery);
     const messages = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    panel.innerHTML = `<h2>Message history</h2>${messages.length ? messages.map((message) => `<article class="record-card"><p><strong>${escapeHtml(nameOrId(message.senderName || message.senderId || message.uid))}</strong> <span class="muted">${formatDate(message.createdAt || message.timestamp)}</span></p><p>${escapeHtml(message.text || message.message || message.body || "")}</p></article>`).join("") : `<div class="empty">No message documents found in chats/${escapeHtml(chatId)}/messages.</div>`}`;
+    panel.innerHTML = `<h2>Message history</h2><div class="support-message-list">${messages.length ? messages.map((message) => `<article class="record-card support-message ${message.senderId === "support_team" ? "from-support" : "from-user"}"><p><strong>${escapeHtml(nameOrId(supportMessageSenderName(message, row)))}</strong> <span class="muted">${formatDate(message.createdAt || message.timestamp)}</span></p><p>${escapeHtml(message.text || message.message || message.body || "")}</p></article>`).join("") : `<div class="empty">No message documents found in chats/${escapeHtml(chatId)}/messages.</div>`}</div>${isSupportChat(row) ? supportReplyComposer() : ""}`;
+    if (isSupportChat(row)) bindSupportReplyComposer(chatId);
   } catch (error) {
     panel.innerHTML = `<h2>Message history</h2><div class="error">Messages could not be loaded. Admin rules may need explicit access to chat message subcollections.</div>`;
   }
+}
+function supportReplyComposer() {
+  return `<form class="support-reply-composer" id="support-reply-form"><div class="field"><label for="support-reply-text">Reply</label><textarea id="support-reply-text" placeholder="Reply as SayVah Support..." rows="3"></textarea></div><div id="support-reply-error" class="form-message" aria-live="polite"></div><div class="action-row"><button class="primary-button" type="submit" id="support-reply-send">Send</button></div></form>`;
+}
+function bindSupportReplyComposer(chatId) {
+  const form = document.getElementById("support-reply-form");
+  const input = document.getElementById("support-reply-text");
+  const button = document.getElementById("support-reply-send");
+  const error = document.getElementById("support-reply-error");
+  if (!form || !input || !button || !error) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    error.textContent = "";
+    if (!text) {
+      error.textContent = "Please enter a message before sending.";
+      return;
+    }
+    button.disabled = true;
+    input.disabled = true;
+    try {
+      await addDoc(collection(db, COLLECTIONS.chats, chatId, "messages"), {
+        text,
+        senderId: "support_team",
+        createdAt: serverTimestamp(),
+        type: "text"
+      });
+      await updateDoc(doc(db, COLLECTIONS.chats, chatId), {
+        lastMessage: text,
+        lastMessageSenderId: "support_team",
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      state.cache.clear();
+      closeModal();
+      renderPage(state.page);
+      showToast("Support reply sent.");
+    } catch (sendError) {
+      console.error("Unable to send support reply", sendError);
+      error.textContent = "Support reply could not be sent. Please check your admin permissions and try again.";
+      button.disabled = false;
+      input.disabled = false;
+      input.focus();
+    }
+  });
 }
 function bindCopyEmail() {
   document.querySelectorAll("[data-copy-email]").forEach((button) => button.addEventListener("click", async (event) => {
@@ -980,9 +1078,11 @@ function filterUser(row, filters, sevadaarsOnly) {
 }
 function filterChats(rows) {
   const tab = state.filters.chats || "all";
+  const newestFirst = (items) => [...items].sort((a, b) => timestampMs(b.lastMessageAt || b.updatedAt || b.createdAt) - timestampMs(a.lastMessageAt || a.updatedAt || a.createdAt));
   if (tab === "all") return rows;
   if (tab === "personal") return rows.filter((c) => !c.isCommunity && !c.public);
   if (tab === "community") return rows.filter((c) => c.isCommunity || c.public || c.type === "community");
+  if (tab === "support") return newestFirst(rows.filter(isSupportChat));
   if (tab === "active") return rows.filter((c) => c.archived !== true && c.status !== "archived");
   if (tab === "archived") return rows.filter((c) => c.archived === true || c.status === "archived");
   return rows;
