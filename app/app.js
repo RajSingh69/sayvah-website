@@ -292,7 +292,7 @@ function renderShell() {
   root.innerHTML = `
     <div class="shell">
       <aside class="sidebar">
-        <a class="brand" href="/"><span class="mark" aria-hidden="true">ੴ</span><span>SayVah</span></a>
+        <a class="brand" href="#/" aria-label="SayVah home"><span class="mark" aria-hidden="true">ੴ</span><span>SayVah</span></a>
         <nav class="nav" aria-label="SayVah">
           ${NAV.map(([path, label, ic]) => `<a href="#/${path}" data-nav="${path}">${icon(ic)}<span>${label}</span></a>`).join("")}
         </nav>
@@ -349,57 +349,124 @@ function profileNotice(kind) {
 
 /* ---------- Home ---------- */
 
+const userCache = new Map();
+function userData(uid) {
+  if (!uid) return Promise.resolve({});
+  if (!userCache.has(uid)) userCache.set(uid, getDoc(doc(db, "users", uid)).then(s => s.data() || {}).catch(() => ({})));
+  return userCache.get(uid);
+}
+function dateBlock(d) {
+  if (!d) return `<span class="date-block"><b>?</b><small>TBC</small></span>`;
+  return `<span class="date-block"><small>${escapeHtml(d.toLocaleDateString("en-GB", { weekday: "short" }))}</small><b>${d.getDate()}</b><small>${escapeHtml(d.toLocaleDateString("en-GB", { month: "short" }))}</small></span>`;
+}
+function homeSummary(upcomingCount, needsCount) {
+  if (needsCount && upcomingCount) return `${needsCount} thing${needsCount > 1 ? "s" : ""} need${needsCount > 1 ? "" : "s"} you, and ${upcomingCount} coming up.`;
+  if (needsCount) return `${needsCount} thing${needsCount > 1 ? "s" : ""} need${needsCount > 1 ? "" : "s"} you today.`;
+  if (upcomingCount) return `You've got ${upcomingCount} thing${upcomingCount > 1 ? "s" : ""} coming up.`;
+  return "Nothing booked yet. Who could you help this week?";
+}
+
 function viewHome(main) {
   document.title = "Home | SayVah";
+  const uid = state.user.uid;
   const p = state.profile || {};
   const first = displayName(p).split(" ")[0];
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const area = pickFirstString(p, ["area", "locationName", "location"]);
+
   main.innerHTML = `
-    <header class="page-head">
-      <div><p class="muted">${greeting}</p><h1>Sat Sri Akal, ${escapeHtml(first)}</h1></div>
-      <div class="row">
-        <a class="btn btn-gold" href="#/new">${icon("plus")} Ask for help</a>
-        <a class="btn btn-surface" href="#/requests">${icon("search")} Find someone to help</a>
+    <div class="home">
+      <header class="home-hello">
+        ${avatarHtml(p, "avatar-hello")}
+        <div>
+          <p class="muted">${greeting}</p>
+          <h1>Sat Sri Akal, ${escapeHtml(first)}</h1>
+          <p class="home-summary" id="home-summary">&nbsp;</p>
+        </div>
+      </header>
+
+      <nav class="tiles" aria-label="Quick actions">
+        <a class="tile tile-gold" href="#/new">${icon("plus")}<b>Ask for help</b><small>Lifts, shopping, tech…</small></a>
+        <a class="tile" href="#/requests">${icon("hand")}<b>Help someone</b><small>See who needs seva</small></a>
+        <a class="tile" href="#/group">${icon("group")}<b>Group seva</b><small>Join a shift</small></a>
+        <a class="tile" href="#/sangat">${icon("sangat")}<b>Local Sangat</b><small>People near you</small></a>
+      </nav>
+
+      <div class="home-cols">
+        <div class="home-main">
+          <section class="home-card" id="needs-card" hidden>
+            <h2>Needs you</h2>
+            <div id="needs" class="stack"></div>
+          </section>
+          <section class="home-card">
+            <div class="card-head"><h2>Coming up</h2></div>
+            <div id="upcoming" class="upcoming"><p class="muted">Loading…</p></div>
+          </section>
+          <section class="home-card">
+            <div class="card-head"><h2>${area ? `Near you in ${escapeHtml(area)}` : "Open requests"}</h2><a href="#/requests" class="small">See all</a></div>
+            <div id="nearby" class="photo-cards"><p class="muted">Loading…</p></div>
+          </section>
+        </div>
+        <aside class="home-side">
+          <section class="home-card">
+            <div class="card-head"><h2>Chats</h2><a href="#/chats" class="small">All chats</a></div>
+            <div id="home-chats" class="stack"><p class="muted">Loading…</p></div>
+          </section>
+          <section class="home-card impact" id="impact"></section>
+        </aside>
       </div>
-    </header>
-    ${!isActiveMember(p) ? profileNotice(roleAllowsRequesting(p) ? "request" : "help") : ""}
-    <div class="home-grid">
-      <section class="panel">
-        <div class="panel-head"><h2>Coming up</h2><span class="muted small">Seva you're part of</span></div>
-        <div id="upcoming" class="stack"><p class="muted">Loading…</p></div>
-      </section>
-      <section class="panel">
-        <div class="panel-head"><h2>Open requests${area ? ` in ${escapeHtml(area)}` : ""}</h2><a href="#/requests" class="small">See all</a></div>
-        <div id="nearby" class="stack"><p class="muted">Loading…</p></div>
-      </section>
-      <section class="panel">
-        <div class="panel-head"><h2>Your requests</h2><a href="#/mine" class="small">Manage</a></div>
-        <div id="home-mine" class="stack"><p class="muted">Loading…</p></div>
-      </section>
-      <section class="panel">
-        <div class="panel-head"><h2>Recent chats</h2><a href="#/chats" class="small">Open chats</a></div>
-        <div id="home-chats" class="stack"><p class="muted">Loading…</p></div>
-      </section>
     </div>`;
 
-  const uid = state.user.uid;
+  const now = Date.now();
   const involved = new Map();
-  let groupShifts = [];
-  const renderUpcoming = () => {
+  let groupShifts = [], friendIn = [];
+  const counts = { upcoming: 0, needs: 0 };
+  const setSummary = () => { const el = document.getElementById("home-summary"); if (el) el.textContent = homeSummary(counts.upcoming, counts.needs); };
+
+  const renderUpcomingAndNeeds = () => {
     const box = document.getElementById("upcoming");
     if (!box) return;
-    const rows = [...involved.values()]
-      .filter(r => ["accepted", "active", "in_progress", "pending_admin_approval"].includes(r.data.status))
-      .map(r => ({ at: requestStart(r.data)?.getTime() ?? Infinity, html: requestRow(r.id, r.data, r.role.startsWith("helper") ? `#/helping/${r.id}` : `#/mine/${r.id}`, r.role.startsWith("helper") ? "You're helping" : "Your request") }))
-      .concat(groupShifts.map(g => ({ at: g.shift.startAt.getTime(), html: `<a class="row-item" href="#/group/${encodeURIComponent(g.ev.id)}">
-        <div class="row-main"><strong>${escapeHtml(g.ev.title)}</strong><small>${escapeHtml(["Group seva", g.shift.label, friendlyDay(g.shift.startAt)].filter(Boolean).join(" · "))}</small></div>
-        <span class="pill status-accepted">You're going</span></a>` })))
-      .sort((a, b) => a.at - b.at);
-    box.innerHTML = rows.length ? rows.slice(0, 6).map(r => r.html).join("")
-      : `<p class="empty">Nothing booked yet. When someone accepts your request, you're approved to help, or you join a <a href="#/group">group seva</a> shift, it shows up here.</p>`;
+    const live = ["accepted", "active", "in_progress", "pending_admin_approval"];
+    const reqItems = [...involved.values()].filter(r => live.includes(r.data.status)).map(r => {
+      const start = requestStart(r.data);
+      const helper = r.role.startsWith("helper");
+      return { start, past: start && start.getTime() < now, helper, html: `<a class="up-item" href="${helper ? `#/helping/${r.id}` : `#/mine/${r.id}`}">${dateBlock(start)}
+        <span class="row-main"><strong>${escapeHtml(r.data.title || "Seva request")}</strong><small>${escapeHtml([helper ? "You're helping" : "Your request", formatTime(start)].filter(Boolean).join(" · "))}</small></span>${statusPill(r.data.status)}</a>`, r };
+    });
+    const groupItems = groupShifts.map(g => ({ start: g.shift.startAt, past: false, html: `<a class="up-item" href="#/group/${encodeURIComponent(g.ev.id)}">${dateBlock(g.shift.startAt)}
+      <span class="row-main"><strong>${escapeHtml(g.ev.title)}</strong><small>${escapeHtml(["Group seva", g.shift.label, formatTime(g.shift.startAt)].filter(Boolean).join(" · "))}</small></span><span class="pill status-accepted">Going</span></a>` }));
+    const upcoming = [...reqItems.filter(i => !i.past), ...groupItems].sort((a, b) => (a.start?.getTime() ?? Infinity) - (b.start?.getTime() ?? Infinity));
+    counts.upcoming = upcoming.length;
+    box.innerHTML = upcoming.length ? upcoming.slice(0, 4).map(i => i.html).join("")
+      : `<div class="empty-warm"><p>Nothing booked yet.</p><a class="btn btn-surface btn-small" href="#/requests">Find someone to help</a></div>`;
+
+    // Things that need the member to act.
+    const needs = [];
+    friendIn.forEach(f => needs.push(`<div class="need">${avatarHtml(f.user)}<span class="row-main"><strong>${escapeHtml(displayName(f.user))}</strong><small>wants to connect</small></span>
+      <button class="btn btn-gold btn-small" data-accept="${escapeHtml(f.id)}">Accept</button></div>`));
+    reqItems.filter(i => i.past && i.helper && ["accepted", "active", "in_progress"].includes(i.r.data.status)).forEach(i => needs.push(`<div class="need">${dateBlock(i.start)}<span class="row-main"><strong>${escapeHtml(i.r.data.title || "Seva request")}</strong><small>Did it go ahead?</small></span>
+      <a class="btn btn-gold btn-small" href="#/helping/${i.r.id}">Mark complete</a></div>`));
+    if (!isActiveMember(p) && verificationStatus(p) !== "pending_review") needs.push(`<div class="need"><span class="need-icon">${icon("user")}</span><span class="row-main"><strong>Finish your profile</strong><small>${isVerified(p) ? "A few details are missing" : "Get verified to ask for or offer help"}</small></span>
+      <a class="btn btn-gold btn-small" href="#/profile">Open</a></div>`);
+    counts.needs = needs.length;
+    const card = document.getElementById("needs-card");
+    if (card) {
+      card.hidden = !needs.length;
+      document.getElementById("needs").innerHTML = needs.join("");
+      card.querySelectorAll("[data-accept]").forEach(b => b.onclick = () => respondFriend(b.dataset.accept, "accepted"));
+    }
+    setSummary();
   };
+
+  const track = role => snap => {
+    for (const [k, v] of involved) if (v.role === role) involved.delete(k);
+    snap.docs.forEach(d => involved.set(d.id, { id: d.id, data: d.data(), role }));
+    renderUpcomingAndNeeds();
+  };
+  listen(query(collection(db, "requests"), where("requesterId", "==", uid)), track("requester"));
+  listen(query(collection(db, "requests"), where("acceptedBy", "==", uid)), track("helper"));
+  listen(query(collection(db, "requests"), where("pendingHelperId", "==", uid)), track("helper-pending"));
   listen(query(collection(db, "sevaEventSignups"), where("userId", "==", uid)), async snap => {
     const found = await Promise.all(snap.docs.map(async d => {
       const s = d.data();
@@ -412,41 +479,54 @@ function viewHome(main) {
       } catch { return null; }
     }));
     groupShifts = found.filter(Boolean);
-    renderUpcoming();
+    renderUpcomingAndNeeds();
   });
-  const track = role => snap => {
-    for (const [k, v] of involved) if (v.role === role) involved.delete(k);
-    snap.docs.forEach(d => involved.set(d.id, { id: d.id, data: d.data(), role }));
-    renderUpcoming();
-  };
-  listen(query(collection(db, "requests"), where("requesterId", "==", uid)), snap => {
-    track("requester")(snap);
-    const mine = snap.docs.map(d => ({ id: d.id, data: d.data() }))
-      .sort((a, b) => (toDate(b.data.createdAt)?.getTime() ?? 0) - (toDate(a.data.createdAt)?.getTime() ?? 0));
-    const box = document.getElementById("home-mine");
-    if (box) box.innerHTML = mine.length ? mine.slice(0, 5).map(r => requestRow(r.id, r.data, `#/mine/${r.id}`)).join("")
-      : `<p class="empty">You haven't asked for help yet. <a href="#/new">Post your first request</a>.</p>`;
-  });
-  listen(query(collection(db, "requests"), where("acceptedBy", "==", uid)), track("helper"));
-  listen(query(collection(db, "requests"), where("pendingHelperId", "==", uid)), track("helper-pending"));
+  listen(query(collection(db, "friendRequests"), where("participantIds", "array-contains", uid)), async snap => {
+    const pending = snap.docs.map(d => d.data()).filter(r => r.receiverId === uid && r.status === "pending");
+    friendIn = await Promise.all(pending.map(async r => ({ id: r.senderId, user: await userData(r.senderId) })));
+    renderUpcomingAndNeeds();
+  }, () => {});
 
   listen(query(collection(db, "requests"), where("status", "==", "open"), orderBy("createdAt", "desc"), limit(60)), snap => {
+    const box = document.getElementById("nearby");
+    if (!box) return;
     const areaKey = area.toLowerCase();
     const open = snap.docs.map(d => ({ id: d.id, data: d.data() }))
       .filter(r => r.data.requesterId !== uid && !state.blocked.has(r.data.requesterId))
       .filter(r => !areaKey || String(r.data.area || "").toLowerCase().includes(areaKey));
-    const box = document.getElementById("nearby");
-    if (box) box.innerHTML = open.length ? open.slice(0, 5).map(r => requestRow(r.id, r.data, `#/requests/${r.id}`)).join("")
-      : `<p class="empty">No open requests${area ? ` in ${escapeHtml(area)}` : ""} right now. <a href="#/requests">Look further afield</a>.</p>`;
-  }, () => { const box = document.getElementById("nearby"); if (box) box.innerHTML = `<p class="empty">Couldn't load requests.</p>`; });
+    box.innerHTML = open.length ? open.slice(0, 3).map(r => `<a class="photo-card" href="#/requests/${r.id}">
+        ${r.data.requestPhotoUrl ? `<img src="${escapeHtml(r.data.requestPhotoUrl)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}
+        <span class="photo-card-body"><strong>${escapeHtml(r.data.title || "Seva request")}</strong><small>${escapeHtml(friendlyDay(requestStart(r.data)))}</small></span></a>`).join("")
+      : `<div class="empty-warm"><p>No one near you needs help right now.</p><a class="btn btn-surface btn-small" href="#/requests">Look further afield</a></div>`;
+  }, () => { const box = document.getElementById("nearby"); if (box) box.innerHTML = `<p class="muted">Couldn't load requests.</p>`; });
 
-  listen(query(collection(db, "chats"), where("participantIds", "array-contains", uid), orderBy("lastMessageAt", "desc"), limit(5)), snap => {
+  listen(query(collection(db, "chats"), where("participantIds", "array-contains", uid), orderBy("lastMessageAt", "desc"), limit(4)), async snap => {
     const box = document.getElementById("home-chats");
     if (!box) return;
     const chats = snap.docs.filter(d => !(d.data().archivedBy || []).includes(uid));
-    box.innerHTML = chats.length ? chats.map(d => chatRow(d.id, d.data())).join("")
-      : `<p class="empty">No chats yet. A chat opens once an admin approves a connection.</p>`;
-  }, () => { const box = document.getElementById("home-chats"); if (box) box.innerHTML = `<p class="empty">Couldn't load chats.</p>`; });
+    if (!chats.length) { box.innerHTML = `<p class="muted small">No chats yet. A chat opens when a helper is approved.</p>`; return; }
+    const rows = await Promise.all(chats.map(async d => {
+      const c = d.data();
+      const other = (c.participantIds || []).find(x => x !== uid);
+      const support = c.type === "support";
+      const person = support ? { fullName: "SayVah Support" } : await userData(other);
+      const fresh = c.lastMessageSenderId && ![uid, "system"].includes(c.lastMessageSenderId) && toDate(c.lastMessageAt) && (now - toDate(c.lastMessageAt).getTime()) < 7 * 86400000;
+      return `<a class="chat-mini ${fresh ? "fresh" : ""}" href="#/chats/${encodeURIComponent(d.id)}">${support ? `<span class="avatar avatar-support">${icon("chat")}</span>` : avatarHtml(person)}
+        <span class="row-main"><strong>${escapeHtml(support ? "SayVah Support" : displayName(person))}</strong><small>${escapeHtml(c.lastMessage || c.title || "No messages yet")}</small></span>${fresh ? `<span class="dot" aria-label="New"></span>` : ""}</a>`;
+    }));
+    box.innerHTML = rows.join("");
+  }, () => { const box = document.getElementById("home-chats"); if (box) box.innerHTML = `<p class="muted small">Couldn't load chats.</p>`; });
+
+  listen(doc(db, "trustProfiles", uid), snap => {
+    const t = snap.data() || {};
+    const el = document.getElementById("impact");
+    if (!el) return;
+    el.innerHTML = `<h2>Your seva</h2>
+      <div class="impact-row">
+        <div><b>${escapeHtml(String(t.completedHelps ?? 0))}</b><small>times you helped</small></div>
+        <div><b>${escapeHtml(String(t.completedRequests ?? 0))}</b><small>times you were helped</small></div>
+      </div>`;
+  }, () => {});
 }
 
 function requestRow(id, data, href, note = "") {
