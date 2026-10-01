@@ -6,3 +6,7 @@ firebase-debug.log
 firebase-debug.*.log
 .runtimeconfig.json
 functions/node_modules/
+
+# Impeccable design tool working files (screenshots, decision pages, caches)
+.impeccable/*
+!.impeccable/config.json
