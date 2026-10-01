@@ -7,7 +7,7 @@ import {
   signOut, setPersistence, browserLocalPersistence, connectAuthEmulator
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
-  getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
+  getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
   onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, Timestamp, deleteField
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
@@ -282,6 +282,7 @@ const NAV = [
   ["requests", "Find requests", "search"],
   ["mine", "My requests", "list"],
   ["helping", "Helping", "hand"],
+  ["group", "Group seva", "group"],
   ["chats", "Chats", "chat"],
   ["profile", "Profile", "user"]
 ];
@@ -327,7 +328,7 @@ function route() {
   const main = document.getElementById("main");
   if (!main) return;
   main.scrollTop = 0;
-  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest, profile: viewProfile };
+  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest, profile: viewProfile, group: viewGroupSeva };
   (views[section] || viewHome)(main, decodeURIComponent(id));
 }
 
@@ -384,15 +385,34 @@ function viewHome(main) {
 
   const uid = state.user.uid;
   const involved = new Map();
+  let groupShifts = [];
   const renderUpcoming = () => {
     const box = document.getElementById("upcoming");
     if (!box) return;
     const rows = [...involved.values()]
       .filter(r => ["accepted", "active", "in_progress", "pending_admin_approval"].includes(r.data.status))
-      .sort((a, b) => (requestStart(a.data)?.getTime() ?? Infinity) - (requestStart(b.data)?.getTime() ?? Infinity));
-    box.innerHTML = rows.length ? rows.slice(0, 6).map(r => requestRow(r.id, r.data, r.role.startsWith("helper") ? `#/helping/${r.id}` : `#/mine/${r.id}`, r.role.startsWith("helper") ? "You're helping" : "Your request")).join("")
-      : `<p class="empty">Nothing booked yet. When someone accepts your request, or you're approved to help, it shows up here.</p>`;
+      .map(r => ({ at: requestStart(r.data)?.getTime() ?? Infinity, html: requestRow(r.id, r.data, r.role.startsWith("helper") ? `#/helping/${r.id}` : `#/mine/${r.id}`, r.role.startsWith("helper") ? "You're helping" : "Your request") }))
+      .concat(groupShifts.map(g => ({ at: g.shift.startAt.getTime(), html: `<a class="row-item" href="#/group/${encodeURIComponent(g.ev.id)}">
+        <div class="row-main"><strong>${escapeHtml(g.ev.title)}</strong><small>${escapeHtml(["Group seva", g.shift.label, friendlyDay(g.shift.startAt)].filter(Boolean).join(" · "))}</small></div>
+        <span class="pill status-accepted">You're going</span></a>` })))
+      .sort((a, b) => a.at - b.at);
+    box.innerHTML = rows.length ? rows.slice(0, 6).map(r => r.html).join("")
+      : `<p class="empty">Nothing booked yet. When someone accepts your request, you're approved to help, or you join a <a href="#/group">group seva</a> shift, it shows up here.</p>`;
   };
+  listen(query(collection(db, "sevaEventSignups"), where("userId", "==", uid)), async snap => {
+    const found = await Promise.all(snap.docs.map(async d => {
+      const s = d.data();
+      try {
+        const evSnap = await getDoc(doc(db, "sevaEvents", String(s.eventId || "")));
+        if (!evSnap.exists()) return null;
+        const ev = sevaEventFrom(evSnap.id, evSnap.data());
+        const shift = ev.shifts.find(x => x.id === s.shiftId);
+        return ev.status === "published" && shift && shift.endAt > new Date() ? { ev, shift } : null;
+      } catch { return null; }
+    }));
+    groupShifts = found.filter(Boolean);
+    renderUpcoming();
+  });
   const track = role => snap => {
     for (const [k, v] of involved) if (v.role === role) involved.delete(k);
     snap.docs.forEach(d => involved.set(d.id, { id: d.id, data: d.data(), role }));
@@ -1339,4 +1359,164 @@ async function touchTrustProfile(user) {
     });
   }
   await setDoc(trustRef, { userId: user.uid, emailVerified: user.emailVerified, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/* ---------- Group seva ---------- */
+
+// Same shape as the app's SevaEvent.fromDoc / SevaShift.fromMap.
+function sevaEventFrom(id, data) {
+  const counts = data.signupCounts && typeof data.signupCounts === "object" ? data.signupCounts : {};
+  const shifts = (Array.isArray(data.shifts) ? data.shifts : [])
+    .filter(s => s && typeof s === "object")
+    .map(s => ({ id: String(s.id ?? ""), label: String(s.label ?? ""), startAt: toDate(s.startAt), endAt: toDate(s.endAt), capacity: Math.trunc(Number(s.capacity ?? 1)) || 1 }))
+    .filter(s => s.startAt && s.endAt);
+  const ev = {
+    id, title: String(data.title ?? "Group seva"), description: String(data.description ?? ""),
+    category: String(data.category ?? "Other"), gurdwaraName: String(data.gurdwaraName ?? ""),
+    area: String(data.area ?? ""), locationText: String(data.locationText ?? ""),
+    startAt: toDate(data.startAt) || new Date(), endAt: toDate(data.endAt) || new Date(),
+    status: String(data.status ?? "published"), shifts,
+    filled: shift => Math.trunc(Number(counts[shift.id] ?? 0)) || 0
+  };
+  ev.totalCapacity = shifts.reduce((t, s) => t + s.capacity, 0);
+  ev.totalSignedUp = shifts.reduce((t, s) => t + ev.filled(s), 0);
+  return ev;
+}
+function eventWhen(ev) { return `${friendlyDay(ev.startAt).split(", ")[0]}, ${formatTime(ev.startAt)}-${formatTime(ev.endAt)}`; }
+function signupIdFor(eventId) { return `${eventId}_${state.user.uid}`; }
+
+function viewGroupSeva(main, selectedId) {
+  document.title = "Group seva | SayVah";
+  main.innerHTML = `
+    <div class="split ${selectedId ? "has-detail" : ""}">
+      <section class="list-pane">
+        <header class="pane-head">
+          <h1>Group seva</h1>
+          <p class="muted small">Langar, cleaning, setup and more. Join a shift with your sangat.</p>
+        </header>
+        <div id="gs-list" class="list"><p class="muted pad">Loading events…</p></div>
+      </section>
+      <section class="detail-pane" id="detail"></section>
+    </div>`;
+  const listEl = document.getElementById("gs-list");
+  const going = new Set();
+  let events = [];
+  const draw = () => {
+    listEl.innerHTML = events.length ? events.map(ev => {
+      const pct = ev.totalCapacity ? Math.min(100, Math.round(ev.totalSignedUp / ev.totalCapacity * 100)) : 0;
+      return `<a class="list-item event-item ${ev.id === selectedId ? "active" : ""}" href="#/group/${encodeURIComponent(ev.id)}">
+        <div class="row-main">
+          <div class="event-tags"><span class="tag">${escapeHtml(ev.category)}</span>${going.has(ev.id) ? `<span class="pill status-accepted">You're going</span>` : ""}</div>
+          <strong>${escapeHtml(ev.title)}</strong>
+          <small>${escapeHtml(eventWhen(ev))}${ev.gurdwaraName ? ` · ${escapeHtml(ev.gurdwaraName)}` : ""}</small>
+          <span class="fill" aria-label="${ev.totalSignedUp} of ${ev.totalCapacity} places taken"><span style="width:${pct}%"></span></span>
+          <small>${ev.totalSignedUp} of ${ev.totalCapacity} places taken</small>
+        </div></a>`;
+    }).join("") : `<p class="empty pad">No group seva coming up right now. Check back soon.</p>`;
+  };
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  listen(query(collection(db, "sevaEvents"), where("startAt", ">=", Timestamp.fromDate(startOfToday)), orderBy("startAt"), limit(50)), snap => {
+    events = snap.docs.map(d => sevaEventFrom(d.id, d.data())).filter(ev => ev.status === "published");
+    draw();
+  }, () => { listEl.innerHTML = `<p class="empty pad">Couldn't load group seva.</p>`; });
+  listen(query(collection(db, "sevaEventSignups"), where("userId", "==", state.user.uid)), snap => {
+    going.clear();
+    snap.docs.forEach(d => going.add(String(d.data().eventId || "")));
+    draw();
+  });
+
+  const detail = document.getElementById("detail");
+  if (!selectedId) { detail.innerHTML = `<div class="detail-empty"><p>Pick an event to see its shifts and sign up.</p></div>`; return; }
+  let ev = null, mine = null, loadedMine = false;
+  const render = () => { if (ev !== null && loadedMine) renderEventDetail(detail, ev, mine); };
+  listen(doc(db, "sevaEvents", selectedId), snap => {
+    ev = snap.exists() ? sevaEventFrom(snap.id, snap.data()) : false;
+    render();
+  }, () => { detail.innerHTML = `<div class="detail-empty"><p>Couldn't load this event.</p></div>`; });
+  listen(doc(db, "sevaEventSignups", signupIdFor(selectedId)), snap => {
+    mine = snap.exists() ? snap.data() : null;
+    loadedMine = true;
+    render();
+  }, () => { loadedMine = true; render(); });
+}
+
+function renderEventDetail(detail, ev, mine) {
+  if (!ev) { detail.innerHTML = `<div class="detail-empty"><p>This event has been removed.</p></div>`; return; }
+  const ended = ev.endAt <= new Date();
+  const cancelled = ev.status === "cancelled";
+  const canJoin = !mine && ev.status === "published" && !ended;
+  const myShift = mine ? ev.shifts.find(s => s.id === mine.shiftId) : null;
+  let banner = "";
+  if (cancelled) banner = `<p class="notice notice-warn">This event has been cancelled.</p>`;
+  else if (myShift) banner = `<p class="notice notice-ok">You're going: ${escapeHtml(myShift.label || "Seva")}, ${escapeHtml(formatTime(myShift.startAt))}-${escapeHtml(formatTime(myShift.endAt))}. Thank you for your seva.</p>`;
+  else if (ended) banner = `<p class="notice">This event has finished.</p>`;
+  else if (state.profile?.isBanned === true || state.profile?.banned === true) banner = `<p class="notice notice-warn">Your account is restricted at the moment, so you can't sign up.</p>`;
+
+  detail.innerHTML = `
+    <article class="request">
+      <a class="back" href="#/group">${icon("back")} Back</a>
+      <div class="request-head"><span class="tag">${escapeHtml(ev.category)}</span></div>
+      <h2>${escapeHtml(ev.title)}</h2>
+      <div class="kvs">
+        <div class="kv"><span>When</span><p>${escapeHtml(eventWhen(ev))}</p></div>
+        ${ev.gurdwaraName ? `<div class="kv"><span>Gurdwara</span><p>${escapeHtml(ev.gurdwaraName)}</p></div>` : ""}
+        ${ev.locationText || ev.area ? `<div class="kv"><span>Where</span><p>${escapeHtml(ev.locationText || ev.area)}</p></div>` : ""}
+      </div>
+      ${ev.description ? `<p class="request-desc">${escapeHtml(ev.description)}</p>` : ""}
+      ${banner}
+      <section class="shifts" aria-label="Shifts">
+        <h3>Shifts</h3>
+        ${ev.shifts.map(s => {
+          const filled = ev.filled(s);
+          const full = filled >= s.capacity;
+          const isMine = mine?.shiftId === s.id;
+          const action = isMine ? `<button class="btn btn-line btn-small" data-leave>Leave</button>`
+            : canJoin ? `<button class="btn btn-gold btn-small" data-join="${escapeHtml(s.id)}" ${full ? "disabled" : ""}>${full ? "Full" : "Join"}</button>` : "";
+          return `<div class="shift ${isMine ? "mine" : ""}">
+            <div class="row-main"><strong>${escapeHtml(s.label || "Seva")}</strong>
+              <small>${escapeHtml(formatTime(s.startAt))}-${escapeHtml(formatTime(s.endAt))} · ${filled}/${s.capacity} volunteers</small></div>
+            ${action}</div>`;
+        }).join("") || `<p class="muted">No shifts listed yet.</p>`}
+      </section>
+    </article>`;
+
+  detail.querySelectorAll("[data-join]").forEach(btn => btn.addEventListener("click", () => joinShift(btn, ev, ev.shifts.find(s => s.id === btn.dataset.join))));
+  detail.querySelector("[data-leave]")?.addEventListener("click", e => leaveShift(e.currentTarget, ev));
+}
+
+// Mirrors GroupSevaService.join in the app.
+async function joinShift(btn, ev, shift) {
+  if (!shift) return;
+  btn.disabled = true; btn.textContent = "Joining…";
+  try {
+    const uid = state.user.uid;
+    const profile = (await getDoc(doc(db, "users", uid))).data() || {};
+    const name = String(profile.fullName ?? "SayVah member");
+    await setDoc(doc(db, "sevaEventSignups", signupIdFor(ev.id)), {
+      eventId: ev.id,
+      userId: uid,
+      name,
+      shiftId: shift.id,
+      attended: false,
+      createdAt: serverTimestamp()
+    });
+    toast("You're signed up. Thank you for your seva!", "ok");
+  } catch (err) {
+    const full = String(err?.code || "").includes("permission-denied");
+    toast(full ? "Couldn't sign you up. The shift may have just filled up, or the event has closed." : friendlyError(err), "err");
+    btn.disabled = false; btn.textContent = "Join";
+  }
+}
+
+// Mirrors GroupSevaService.leave in the app.
+async function leaveShift(btn, ev) {
+  if (!confirm(`Leave your shift at "${ev.title}"?`)) return;
+  btn.disabled = true; btn.textContent = "Leaving…";
+  try {
+    await deleteDoc(doc(db, "sevaEventSignups", signupIdFor(ev.id)));
+    toast("You have left this shift.", "ok");
+  } catch (err) {
+    toast(friendlyError(err), "err");
+    btn.disabled = false; btn.textContent = "Leave";
+  }
 }
