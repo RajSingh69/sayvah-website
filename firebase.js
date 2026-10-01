@@ -2,8 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebas
 import {
   getFirestore,
   collection,
-  query,
-  where,
   onSnapshot,
   addDoc,
   serverTimestamp
@@ -104,18 +102,17 @@ function setLaunchStatus(message, type) {
 
 
 if (locationsList) {
-  const locationsQuery = query(
-    collection(db, "locations"),
-    where("active", "==", true)
-  );
-
+  // Same rule as the app's AreaService.isSelectableArea: older area records use
+  // "active", newer ones "isActive", so filter here rather than in the query.
   onSnapshot(
-    locationsQuery,
+    collection(db, "locations"),
     (snapshot) => {
       const locations = snapshot.docs
         .map((doc) => doc.data())
+        .filter(isSelectableArea)
+        .map((item) => ({ ...item, name: String(item.name || item.title || item.area || "").trim() }))
         .filter((item) => item.name)
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
       if (locations.length === 0) {
         locationsList.innerHTML = `
@@ -134,7 +131,7 @@ if (locationsList) {
 
               <div>
                 <strong>${escapeHtml(location.name)}</strong>
-                <span>Active SayVah area</span>
+                <span>${escapeHtml(location.region || "Active SayVah area")}</span>
               </div>
 
               <div class="live-location-status">
@@ -155,6 +152,13 @@ if (locationsList) {
       `;
     }
   );
+}
+
+function isSelectableArea(data) {
+  const status = String(data.status || "").trim().toLowerCase();
+  const active = data.isActive ?? data.active;
+  const visible = data.isVisible ?? data.visible;
+  return !["rejected", "inactive", "disabled", "hidden"].includes(status) && active !== false && visible !== false;
 }
 
 function escapeHtml(value) {
