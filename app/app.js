@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
   getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
-  onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, Timestamp
+  onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, Timestamp, deleteField
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   getStorage, connectStorageEmulator, ref as storageRef, uploadBytes, getDownloadURL
@@ -43,6 +43,7 @@ const APP_STORE_URL = "https://apps.apple.com/gb/app/id6772755865";
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.sayvah.app&hl=en_GB";
 const REQUEST_TAGS = ["Lifting", "Construction", "Gardening", "Cleaning", "Tech Help", "Elderly Support", "Tutoring", "Food Seva", "Weekend", "Urgent"];
 const SERVICE_TYPES = ["In Person", "Online"];
+const SKILLS = ["Driver", "Punjabi Translator", "English Translator", "IT Help", "Teacher", "Gardening", "Cooking", "Electrician", "Plumber", "Builder", "Nurse", "Mental Health Support", "Lawyer", "Accountant", "Photography", "Video Editing", "Graphic Design"];
 
 const root = document.getElementById("root");
 const state = { user: null, profile: null, blocked: new Set(), profileUnsub: null, blockedUnsub: null };
@@ -210,7 +211,7 @@ onAuthStateChanged(auth, user => {
   state.profileUnsub = onSnapshot(doc(db, "users", user.uid), snap => {
     const first = state.profile === null;
     state.profile = snap.data() || {};
-    if (first) { renderShell(); route(); } else { renderSidebarProfile(); }
+    if (first) { renderShell(); route(); } else { renderSidebarProfile(); renderStatusPanel(); }
   }, err => { console.error(err); state.profile = {}; renderShell(); route(); });
   state.blockedUnsub = onSnapshot(collection(db, "users", user.uid, "blockedUsers"), snap => {
     state.blocked = new Set(snap.docs.map(d => d.id));
@@ -281,7 +282,8 @@ const NAV = [
   ["requests", "Find requests", "search"],
   ["mine", "My requests", "list"],
   ["helping", "Helping", "hand"],
-  ["chats", "Chats", "chat"]
+  ["chats", "Chats", "chat"],
+  ["profile", "Profile", "user"]
 ];
 
 function renderShell() {
@@ -308,10 +310,10 @@ function renderSidebarProfile() {
   const photo = pickFirstString(p, ["photoUrl", "profileImageUrl", "imageUrl"]);
   const area = pickFirstString(p, ["area", "locationName", "location"]);
   me.innerHTML = `
-    <div class="me-row">
-      ${photo ? `<img src="${escapeHtml(photo)}" alt="" />` : `<span class="avatar">${escapeHtml(displayName(p).charAt(0))}</span>`}
+    <a class="me-row" href="#/profile" title="Edit your profile">
+      <span class="avatar">${escapeHtml(displayName(p).charAt(0))}${photo ? `<img src="${escapeHtml(photo)}" alt="" onerror="this.remove()" />` : ""}</span>
       <div><strong>${escapeHtml(displayName(p))}</strong><small>${escapeHtml(area || "No area set")}${isVerified(p) ? " · Verified" : ""}</small></div>
-    </div>
+    </a>
     <button class="link-button" id="signout">${icon("out")} Sign out</button>`;
   document.getElementById("signout").onclick = () => signOut(auth);
 }
@@ -325,7 +327,7 @@ function route() {
   const main = document.getElementById("main");
   if (!main) return;
   main.scrollTop = 0;
-  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest };
+  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest, profile: viewProfile };
   (views[section] || viewHome)(main, decodeURIComponent(id));
 }
 
@@ -335,10 +337,12 @@ function profileNotice(kind) {
   if (ok) return "";
   let reason;
   if (p.isBanned === true || p.banned === true) reason = "Your account is restricted at the moment. Contact SayVah Support if you think this is a mistake.";
-  else if (missingRequirements(p).length) reason = `Your profile still needs ${missingRequirements(p).join(", ")}. Add ${missingRequirements(p).length > 1 ? "them" : "it"} in the SayVah app, then you can ${kind === "request" ? "post requests" : "offer help"}.`;
-  else if (!isVerified(p)) reason = `Your account is waiting for verification by a SayVah admin. Once it's verified you can ${kind === "request" ? "post requests" : "offer help"}.`;
+  else if (missingRequirements(p).length) reason = `Your profile still needs ${missingRequirements(p).join(", ")}. Add ${missingRequirements(p).length > 1 ? "them" : "it"} on your Profile page, then you can ${kind === "request" ? "post requests" : "offer help"}.`;
+  else if (!isVerified(p)) reason = pickFirstString(p, ["verificationStatus"]).toLowerCase() === "pending_review"
+    ? `Your account is waiting for verification by a SayVah admin. Once it's verified you can ${kind === "request" ? "post requests" : "offer help"}.`
+    : `Your account isn't verified yet. Send it for verification from your Profile page, then you can ${kind === "request" ? "post requests" : "offer help"}.`;
   else reason = kind === "request" ? "Your account role doesn't include asking for help. You can change your role in the SayVah app." : "Your account role doesn't include volunteering. You can change your role in the SayVah app.";
-  return `<p class="notice notice-warn">${escapeHtml(reason)}</p>`;
+  return `<p class="notice notice-warn">${escapeHtml(reason)} <a href="#/profile">Go to your profile</a></p>`;
 }
 
 /* ---------- Home ---------- */
@@ -1041,4 +1045,298 @@ async function openChat(detail, chatId) {
       toast(`Message not sent. ${friendlyError(err)}`, "err");
     } finally { sending = false; }
   });
+}
+
+/* ---------- Profile ---------- */
+
+// Same checks as the app's LinkedinUrlService.normalize.
+function normalizeLinkedin(input) {
+  const trimmed = String(input || "").trim();
+  if (!trimmed) return "";
+  let url;
+  try { url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`); } catch { return ""; }
+  const host = url.hostname.toLowerCase();
+  if (!["https:", "http:"].includes(url.protocol)) return "";
+  if (host !== "linkedin.com" && host !== "www.linkedin.com") return "";
+  const path = url.pathname.replace(/\/+$/, "");
+  if (!/^\/(in|pub|company|school)\/[A-Za-z0-9._%\-]+$/.test(path)) return "";
+  return `https://www.linkedin.com${path}`;
+}
+// Same rule as the app's AreaService.isSelectableArea.
+function isSelectableArea(d) {
+  const status = String(d.status || "").trim().toLowerCase();
+  const active = d.isActive ?? d.active;
+  const visible = d.isVisible ?? d.visible;
+  return !["rejected", "inactive", "disabled", "hidden"].includes(status) && active !== false && visible !== false;
+}
+function verificationStatus(d) {
+  if (isVerified(d)) return "verified";
+  if (missingRequirements(d).length || pickFirstBool(d, ["isApproved", "approved"]) === false) return "incomplete";
+  const s = pickFirstString(d, ["verificationStatus"]).toLowerCase();
+  return ["pending_review", "changes_requested", "ready_for_review"].includes(s) ? s : "ready_for_review";
+}
+
+async function viewProfile(main) {
+  document.title = "Profile | SayVah";
+  const user = state.user;
+  const uid = user.uid;
+  main.innerHTML = `<div class="form-page"><header class="page-head"><div><h1>Your profile</h1></div></header><p class="muted pad">Loading your profile…</p></div>`;
+
+  const [userSnap, contactSnap, areasSnap, gurdwarasSnap, trustSnap] = await Promise.all([
+    getDoc(doc(db, "users", uid)),
+    getDoc(doc(db, "users", uid, "private", "contact")).catch(() => null),
+    getDocs(collection(db, "locations")).catch(() => null),
+    getDocs(query(collection(db, "gurdwaras"), orderBy("name"))).catch(() => null),
+    getDoc(doc(db, "trustProfiles", uid)).catch(() => null)
+  ]);
+  if (!location.hash.startsWith("#/profile")) return;
+  const p = userSnap.data() || {};
+  const contact = contactSnap?.data() || {};
+  // Older app versions kept contact details on the public profile.
+  const phone = contact.phone || p.phone || "";
+  const homePostcode = contact.homePostcode || p.homePostcode || "";
+  const areas = (areasSnap?.docs || []).map(d => ({ id: d.id, data: d.data() }))
+    .filter(a => isSelectableArea(a.data))
+    .map(a => ({ id: a.id, name: pickFirstString(a.data, ["name", "title", "area"]), region: pickFirstString(a.data, ["region", "county", "serviceRegion", "serviceArea"]) }))
+    .filter(a => a.name).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  const gurdwaras = (gurdwarasSnap?.docs || []).map(d => ({ id: d.id, name: String(d.data().name || "Unnamed Gurdwara") }));
+  const trust = trustSnap?.data() || {};
+
+  let areaId = pickFirstString(p, ["locationId"]);
+  const areaName = pickFirstString(p, ["locationName", "area", "location"]);
+  if (!areas.some(a => a.id === areaId)) areaId = areas.find(a => a.name.toLowerCase() === areaName.toLowerCase())?.id || "";
+  const originalOrgId = String(p.organisationId || "");
+  const originalOrgStatus = String(p.organisationStatus || "none");
+  const skills = new Set(Array.isArray(p.skills) ? p.skills.map(String) : []);
+  const photoUrl = String(p.photoUrl || "");
+  const radius = Math.round(Number(p.preferredRadiusMiles ?? 10)) || 10;
+  const role = pickFirstString(p, ["role"]) || "Not set";
+  const orgStatusText = { pending: "Waiting for the Gurdwara to confirm", approved: "Confirmed", rejected: "Not confirmed" }[originalOrgStatus] || "";
+
+  main.innerHTML = `
+    <div class="form-page profile-page">
+      <header class="page-head"><div><h1>Your profile</h1>
+        <p class="muted">This is what other SayVah members see when you ask for or offer help. Changes show up in the app straight away.</p></div></header>
+      <form id="profile-form" class="new-form profile-grid" novalidate>
+        <div class="stack-lg">
+          <section class="panel">
+            <h2>Photo</h2>
+            <div class="photo-row">
+              <span id="avatar-preview" class="avatar-lg">${escapeHtml(displayName(p).charAt(0))}${photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="Your profile picture" onerror="this.remove()" />` : ""}</span>
+              <div class="stack">
+                <label class="btn btn-surface btn-small file-btn">Choose a new photo<input type="file" name="photo" accept="image/*" /></label>
+                <button type="button" class="link-button" id="remove-photo" ${photoUrl ? "" : "hidden"}>Remove photo</button>
+                <p class="muted small">A clear photo of your face helps people trust who they're meeting.</p>
+              </div>
+            </div>
+          </section>
+          <section class="panel">
+            <h2>About you</h2>
+            <label class="field"><span>Full name</span><input name="fullName" maxlength="80" required value="${escapeHtml(p.fullName || "")}" /></label>
+            <label class="field"><span>Your SayVah area</span>
+              <select name="areaId" required>
+                <option value="">Choose your area</option>
+                ${areas.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === areaId ? "selected" : ""}>${escapeHtml(a.name)}${a.region ? ` (${escapeHtml(a.region)})` : ""}</option>`).join("")}
+              </select></label>
+            ${!areaId && areaName ? `<p class="muted small">Your profile currently says "${escapeHtml(areaName)}". Pick the matching area from the list.</p>` : ""}
+            <label class="field"><span>Gurdwara or organisation</span>
+              <select name="organisationId">
+                <option value="">No affiliation</option>
+                ${gurdwaras.map(g => `<option value="${escapeHtml(g.id)}" ${g.id === originalOrgId ? "selected" : ""}>${escapeHtml(g.name)}</option>`).join("")}
+              </select></label>
+            <p class="muted small" id="org-note">${orgStatusText ? `Status: ${escapeHtml(orgStatusText)}.` : "Choosing one asks that Gurdwara's admin to confirm you."}</p>
+            <label class="field"><span>About you <small class="muted">(optional)</small></span><textarea name="about" rows="4" maxlength="600" placeholder="A little about you and how you like to help">${escapeHtml(p.about || "")}</textarea></label>
+            <label class="field"><span>LinkedIn profile <small class="muted">(optional)</small></span><input name="linkedinUrl" inputmode="url" placeholder="linkedin.com/in/your-name" value="${escapeHtml(p.linkedinUrl || "")}" /></label>
+          </section>
+          <section class="panel">
+            <h2>Skills you can offer</h2>
+            <p class="muted small">Requests that match your skills are shown to you first.</p>
+            <div class="chips">${SKILLS.map(sk => `<label class="chip-check"><input type="checkbox" name="skills" value="${escapeHtml(sk)}" ${skills.has(sk) ? "checked" : ""} /><span>${escapeHtml(sk)}</span></label>`).join("")}</div>
+            <label class="field"><span>How far you're happy to travel: <b id="radius-out">${radius} miles</b></span>
+              <input type="range" name="radius" min="1" max="50" step="1" value="${radius}" class="range" /></label>
+          </section>
+        </div>
+
+        <div class="stack-lg">
+          <section class="panel" id="status-panel"></section>
+          <section class="panel">
+            <h2>Private contact details</h2>
+            <p class="muted small">Only you, SayVah admins and your Gurdwara's admin can see these. Other members never do.</p>
+            <label class="field"><span>Phone number</span><input name="phone" type="tel" maxlength="40" autocomplete="tel" value="${escapeHtml(phone)}" /></label>
+            <label class="field"><span>Home postcode</span><input name="homePostcode" maxlength="16" autocomplete="postal-code" value="${escapeHtml(homePostcode)}" /></label>
+            <label class="field"><span>Emergency contact name</span><input name="emergencyContactName" maxlength="80" value="${escapeHtml(contact.emergencyContactName || "")}" /></label>
+            <label class="field"><span>Emergency contact phone</span><input name="emergencyContactPhone" type="tel" maxlength="40" value="${escapeHtml(contact.emergencyContactPhone || "")}" /></label>
+            <p class="muted small">Sign-in email: ${escapeHtml(user.email || "")}</p>
+          </section>
+          <section class="panel">
+            <h2>Your SayVah record</h2>
+            <div class="kv-mini">
+              <div><span>Trust score</span><b>${escapeHtml(String(trust.trustScore ?? 50))}</b></div>
+              <div><span>Rating</span><b>${trust.ratingCount ? `${Number(trust.ratingAverage || 0).toFixed(1)} (${escapeHtml(String(trust.ratingCount))})` : "None yet"}</b></div>
+              <div><span>Seva given</span><b>${escapeHtml(String(trust.completedHelps ?? 0))}</b></div>
+              <div><span>Help received</span><b>${escapeHtml(String(trust.completedRequests ?? 0))}</b></div>
+            </div>
+            <p class="muted small">Account role: ${escapeHtml(role)}. To change it, contact SayVah Support.</p>
+          </section>
+        </div>
+
+        <div class="submit-bar profile-submit">
+          <p class="form-msg" id="profile-msg" role="alert"></p>
+          <button class="btn btn-gold" type="submit" id="profile-save">Save changes</button>
+        </div>
+      </form>
+    </div>`;
+
+  const form = document.getElementById("profile-form");
+  let removePhoto = false;
+  form.radius.addEventListener("input", () => { document.getElementById("radius-out").textContent = `${form.radius.value} miles`; });
+  form.organisationId.addEventListener("change", () => {
+    const id = form.organisationId.value;
+    document.getElementById("org-note").textContent = !id ? "No affiliation."
+      : id === originalOrgId && orgStatusText ? `Status: ${orgStatusText}.` : "That Gurdwara's admin will be asked to confirm you.";
+  });
+  form.photo.addEventListener("change", () => {
+    const file = form.photo.files[0];
+    if (!file) return;
+    removePhoto = false;
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.alt = "Your new profile picture";
+    document.getElementById("avatar-preview").replaceChildren(img);
+    document.getElementById("remove-photo").hidden = false;
+  });
+  document.getElementById("remove-photo").addEventListener("click", () => {
+    removePhoto = true;
+    form.photo.value = "";
+    document.getElementById("avatar-preview").textContent = displayName(p).charAt(0);
+    document.getElementById("remove-photo").hidden = true;
+  });
+  renderStatusPanel();
+  form.addEventListener("submit", e => saveProfile(e, { form, areas, gurdwaras, originalOrgId, originalOrgStatus, photoUrl, getRemovePhoto: () => removePhoto }));
+}
+
+function renderStatusPanel() {
+  const panel = document.getElementById("status-panel");
+  if (!panel) return;
+  const p = state.profile || {};
+  const status = verificationStatus(p);
+  const missing = missingRequirements(p);
+  const review = pickFirstString(p, ["verificationReviewMessage"]);
+  const body = {
+    verified: `<p class="notice notice-ok">Your account is verified. You can ask for and offer help.</p>`,
+    incomplete: `<p class="notice notice-warn">To get verified, your profile still needs ${escapeHtml(missing.join(", ") || "approval")}.${missing.includes("your account role") ? " Your role is set when you sign up in the app; contact SayVah Support if it's missing." : ""}</p>`,
+    pending_review: `<p class="notice">Thanks, a SayVah admin is checking your account. You'll be able to post and offer help once it's verified.</p>`,
+    changes_requested: `<p class="notice notice-warn">An admin asked for some changes${review ? `: “${escapeHtml(review)}”` : "."} Update your profile, then submit it again.</p><button type="button" class="btn btn-gold btn-small" id="submit-review">Submit for verification</button>`,
+    ready_for_review: `<p class="notice">Your profile is complete. Send it to a SayVah admin to be verified.</p><button type="button" class="btn btn-gold btn-small" id="submit-review">Submit for verification</button>`
+  }[status];
+  panel.innerHTML = `<h2>Account status</h2>${body}`;
+  document.getElementById("submit-review")?.addEventListener("click", submitForReview);
+}
+
+// Mirrors the verification checklist's submit in the app.
+async function submitForReview(e) {
+  const btn = e.currentTarget;
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const uid = state.user.uid;
+    const latest = (await getDoc(doc(db, "users", uid))).data() || {};
+    if (verificationStatus(latest) === "pending_review") return;
+    if (missingRequirements(latest).length || isVerified(latest)) throw new Error("Please complete the missing profile items and save first.");
+    await setDoc(doc(db, "users", uid), {
+      verificationStatus: "pending_review",
+      verificationRequestedAt: serverTimestamp(),
+      verificationReviewMessage: null,
+      isVerified: false,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    toast("Sent. A SayVah admin will check your account.", "ok");
+  } catch (err) {
+    toast(friendlyError(err), "err");
+    btn.disabled = false; btn.textContent = "Submit for verification";
+  }
+}
+
+// Mirrors EditProfileScreen.saveProfile in the app.
+async function saveProfile(event, ctx) {
+  event.preventDefault();
+  const { form, areas, gurdwaras, originalOrgId, originalOrgStatus } = ctx;
+  const msg = document.getElementById("profile-msg");
+  const button = document.getElementById("profile-save");
+  const user = state.user;
+  const val = name => String(form[name]?.value || "").trim();
+  const fullName = val("fullName");
+  const area = areas.find(a => a.id === form.areaId.value);
+  const linkedinRaw = val("linkedinUrl");
+  const linkedinUrl = normalizeLinkedin(linkedinRaw);
+  const file = form.photo.files[0];
+  msg.textContent = "";
+
+  if (!fullName || !area) { msg.textContent = "Please fill in at least your full name and area."; return; }
+  if (linkedinRaw && !linkedinUrl) { msg.textContent = "That LinkedIn link doesn't look right. Use your profile address, e.g. linkedin.com/in/your-name."; return; }
+  if (file && !file.type.startsWith("image/")) { msg.textContent = "Your photo needs to be an image file."; return; }
+  if (file && file.size >= 10 * 1024 * 1024) { msg.textContent = "That photo is too big. Please use one under 10 MB."; return; }
+
+  button.disabled = true; button.textContent = "Saving…";
+  try {
+    let photoUrl = ctx.getRemovePhoto() ? "" : ctx.photoUrl;
+    if (file) {
+      const uploaded = await uploadBytes(storageRef(storage, `profile_pictures/${user.uid}/profile_${Date.now()}.jpg`), file, { contentType: file.type || "image/jpeg" });
+      photoUrl = await getDownloadURL(uploaded.ref);
+    }
+    const orgId = form.organisationId.value;
+    const orgName = gurdwaras.find(g => g.id === orgId)?.name || "";
+    const orgStatus = !orgId ? "none" : orgId === originalOrgId ? originalOrgStatus : "pending";
+
+    // Role is deliberately not saved here, as in the app.
+    await setDoc(doc(db, "users", user.uid), {
+      fullName,
+      // Contact details are saved privately below; clear any legacy public copies.
+      phone: deleteField(),
+      email: deleteField(),
+      homePostcode: deleteField(),
+      area: area.name,
+      locationName: area.name,
+      locationId: area.id,
+      affiliation: orgName,
+      organisationId: orgId,
+      organisationName: orgName,
+      organisationStatus: orgStatus,
+      about: val("about"),
+      linkedinUrl: linkedinUrl || deleteField(),
+      photoUrl,
+      skills: [...form.querySelectorAll("input[name=skills]:checked")].map(i => i.value),
+      preferredRadiusMiles: Number(form.radius.value)
+    }, { merge: true });
+
+    await setDoc(doc(db, "users", user.uid, "private", "contact"), {
+      phone: val("phone"),
+      email: user.email ?? null,
+      homePostcode: val("homePostcode"),
+      emergencyContactName: val("emergencyContactName"),
+      emergencyContactPhone: val("emergencyContactPhone"),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    try { await touchTrustProfile(user); } catch { /* the server keeps it in sync anyway */ }
+
+    toast("Profile saved.", "ok");
+    location.hash = "#/";
+  } catch (err) {
+    msg.textContent = friendlyError(err);
+    button.disabled = false; button.textContent = "Save changes";
+  }
+}
+
+// Mirrors TrustService.syncAndRecalculate: make sure the trust profile exists, then nudge it.
+async function touchTrustProfile(user) {
+  const trustRef = doc(db, "trustProfiles", user.uid);
+  if (!(await getDoc(trustRef)).exists()) {
+    await setDoc(trustRef, {
+      userId: user.uid, trustScore: 50, ratingAverage: 0.0, ratingCount: 0, ratingTotal: 0,
+      completedRequests: 0, completedHelps: 0, cancelCount: 0, reportCount: 0, noShowCount: 0,
+      emailVerified: user.emailVerified, phoneVerified: false, idVerified: false, photoVerified: false,
+      backgroundCheckVerified: false, badgeLevel: "new", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+  }
+  await setDoc(trustRef, { userId: user.uid, emailVerified: user.emailVerified, updatedAt: serverTimestamp() }, { merge: true });
 }
