@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {
   getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, Timestamp, deleteField
+  onSnapshot, query, where, orderBy, limit, runTransaction, serverTimestamp, Timestamp, deleteField, arrayUnion, increment
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {
   getStorage, connectStorageEmulator, ref as storageRef, uploadBytes, getDownloadURL
@@ -283,6 +283,7 @@ const NAV = [
   ["mine", "My requests", "list"],
   ["helping", "Helping", "hand"],
   ["group", "Group seva", "group"],
+  ["sangat", "Local Sangat", "sangat"],
   ["chats", "Chats", "chat"],
   ["profile", "Profile", "user"]
 ];
@@ -328,7 +329,7 @@ function route() {
   const main = document.getElementById("main");
   if (!main) return;
   main.scrollTop = 0;
-  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest, profile: viewProfile, group: viewGroupSeva };
+  const views = { "": viewHome, requests: viewBrowse, mine: viewMine, helping: viewHelping, chats: viewChats, new: viewNewRequest, profile: viewProfile, group: viewGroupSeva, sangat: viewSangat };
   (views[section] || viewHome)(main, decodeURIComponent(id));
 }
 
@@ -1519,4 +1520,297 @@ async function leaveShift(btn, ev) {
     toast(friendlyError(err), "err");
     btn.disabled = false; btn.textContent = "Leave";
   }
+}
+
+/* ---------- Local Sangat ---------- */
+
+const REPORT_REASONS = ["Abusive or inappropriate behaviour", "Harassment or bullying", "Spam or fake profile", "Unsafe behaviour", "Other"];
+const BADGE_LABELS = { new: "New", basic: "Basic", trusted: "Trusted", highly_trusted: "Highly Trusted" };
+function friendRequestId(a, b) { return [a, b].sort().join("_"); }
+// Same as CommunitySocialService.relationshipStatus in the app.
+function relationshipStatus(requests, me, other) {
+  for (const r of requests) {
+    const sameTwo = (r.senderId === me && r.receiverId === other) || (r.senderId === other && r.receiverId === me);
+    if (!sameTwo) continue;
+    if (r.status === "accepted") return "friends";
+    if (r.status === "pending" && r.senderId === me) return "sent";
+    if (r.status === "pending" && r.receiverId === me) return "incoming";
+  }
+  return "none";
+}
+function memberArea(data, areas) {
+  const id = pickFirstString(data, ["locationId"]);
+  if (id) { const byId = areas.find(a => a.id === id); if (byId) return byId; }
+  const name = pickFirstString(data, ["locationName", "area", "location"]).toLowerCase();
+  return name ? areas.find(a => a.name.toLowerCase() === name) || null : null;
+}
+function avatarHtml(data, cls = "avatar") {
+  const photo = pickFirstString(data, ["photoUrl", "profileImageUrl", "imageUrl"]);
+  return `<span class="${cls}">${escapeHtml(displayName(data).charAt(0))}${photo ? `<img src="${escapeHtml(photo)}" alt="" loading="lazy" onerror="this.remove()" />` : ""}</span>`;
+}
+
+function viewSangat(main, selectedId) {
+  document.title = "Local Sangat | SayVah";
+  const uid = state.user.uid;
+  main.innerHTML = `
+    <div class="split ${selectedId ? "has-detail" : ""}">
+      <section class="list-pane">
+        <header class="pane-head">
+          <h1>Local Sangat</h1>
+          <div id="incoming"></div>
+          <div class="filters">
+            <input id="s-search" type="search" placeholder="Search by name, role or area" aria-label="Search members" />
+            <div class="row">
+              <label class="field select-inline"><span class="sr-only">Area</span><select id="s-area"></select></label>
+            </div>
+            <div class="chips" role="group" aria-label="Show">
+              <button class="chip active" data-mode="area">My area</button>
+              <button class="chip" data-mode="all">All areas</button>
+              <button class="chip" data-mode="friends">Friends</button>
+            </div>
+          </div>
+        </header>
+        <div id="s-list" class="list"><p class="muted pad">Loading members…</p></div>
+      </section>
+      <section class="detail-pane" id="detail"></section>
+    </div>`;
+
+  let users = [], requests = [], areas = [], mode = "area", search = "", areaId = "";
+  const listEl = document.getElementById("s-list");
+  const areaSel = document.getElementById("s-area");
+
+  const draw = () => {
+    const incoming = requests.filter(r => r.receiverId === uid && r.status === "pending");
+    const byId = new Map(users.map(u => [u.id, u.data]));
+    document.getElementById("incoming").innerHTML = incoming.length ? `
+      <div class="incoming"><strong>Friend requests</strong>
+        ${incoming.map(r => { const d = byId.get(r.senderId) || {}; return `<div class="incoming-row">
+          <a href="#/sangat/${encodeURIComponent(r.senderId)}" class="incoming-who">${avatarHtml(d)}<span>${escapeHtml(displayName(d))}</span></a>
+          <button class="btn btn-gold btn-small" data-accept="${escapeHtml(r.senderId)}">Accept</button>
+          <button class="btn btn-line btn-small" data-decline="${escapeHtml(r.senderId)}">Decline</button></div>`; }).join("")}
+      </div>` : "";
+    const friendIds = new Set(requests.filter(r => r.status === "accepted").map(r => r.senderId === uid ? r.receiverId : r.senderId));
+    const q = search.toLowerCase();
+    const rows = users.filter(u => u.id !== uid && isActiveMember(u.data) && !state.blocked.has(u.id))
+      .filter(u => mode === "friends" ? friendIds.has(u.id) : mode === "all" || !areaId || memberArea(u.data, areas)?.id === areaId)
+      .filter(u => !q || [displayName(u.data), pickFirstString(u.data, ["role", "communityRole", "userType"]), pickFirstString(u.data, ["locationName", "area", "location"])].join(" ").toLowerCase().includes(q))
+      .sort((a, b) => displayName(a.data).toLowerCase().localeCompare(displayName(b.data).toLowerCase()));
+    listEl.innerHTML = rows.length ? rows.map(u => {
+      const rel = relationshipStatus(requests, uid, u.id);
+      const pill = { friends: `<span class="pill status-accepted">Friends</span>`, sent: `<span class="pill status-closed">Request sent</span>`, incoming: `<span class="pill status-pending">Wants to connect</span>` }[rel] || "";
+      return `<a class="list-item ${u.id === selectedId ? "active" : ""}" href="#/sangat/${encodeURIComponent(u.id)}">${avatarHtml(u.data, "avatar avatar-md")}
+        <div class="row-main"><strong>${escapeHtml(displayName(u.data))}</strong>
+        <small>${escapeHtml([pickFirstString(u.data, ["locationName", "area", "location"]), pickFirstString(u.data, ["role", "communityRole", "userType"])].filter(Boolean).join(" · "))}</small></div>${pill}</a>`;
+    }).join("") : `<p class="empty pad">${mode === "friends" ? "No friends yet. Open someone's profile and press Add friend." : search ? "No members found." : "No verified SayVah members are listed in this area yet."}</p>`;
+    document.querySelectorAll("[data-accept]").forEach(b => b.onclick = () => respondFriend(b.dataset.accept, "accepted"));
+    document.querySelectorAll("[data-decline]").forEach(b => b.onclick = () => respondFriend(b.dataset.decline, "declined"));
+  };
+
+  main.querySelectorAll("[data-mode]").forEach(chip => chip.addEventListener("click", () => {
+    mode = chip.dataset.mode;
+    main.querySelectorAll("[data-mode]").forEach(c => c.classList.toggle("active", c === chip));
+    draw();
+  }));
+  document.getElementById("s-search").addEventListener("input", e => { search = e.target.value.trim(); draw(); });
+  areaSel.addEventListener("change", () => {
+    areaId = areaSel.value; mode = "area";
+    main.querySelectorAll("[data-mode]").forEach(c => c.classList.toggle("active", c.dataset.mode === "area"));
+    draw();
+  });
+
+  listen(collection(db, "locations"), snap => {
+    areas = snap.docs.map(d => ({ id: d.id, data: d.data() })).filter(a => isSelectableArea(a.data))
+      .map(a => ({ id: a.id, name: pickFirstString(a.data, ["name", "title", "area"]) })).filter(a => a.name)
+      .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    if (!areaId) areaId = memberArea(state.profile || {}, areas)?.id || "";
+    areaSel.innerHTML = `<option value="">Any area</option>` + areas.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === areaId ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join("");
+    draw();
+  });
+  listen(collection(db, "users"), snap => { users = snap.docs.map(d => ({ id: d.id, data: d.data() })); draw(); },
+    () => { listEl.innerHTML = `<p class="empty pad">Couldn't load Local Sangat. Please try again.</p>`; });
+  listen(query(collection(db, "friendRequests"), where("participantIds", "array-contains", uid)), snap => {
+    requests = snap.docs.map(d => d.data());
+    draw();
+    if (selectedId) renderMember();
+  });
+
+  const detail = document.getElementById("detail");
+  if (!selectedId) { detail.innerHTML = `<div class="detail-empty"><p>Pick someone to see their profile, add them as a friend or endorse them.</p></div>`; return; }
+  let member = null, trust = {}, endorseCount = 0, endorsedByMe = false;
+  const renderMember = () => { if (member !== null) renderMemberDetail(detail, selectedId, member, trust, endorseCount, endorsedByMe, relationshipStatus(requests, uid, selectedId)); };
+  listen(doc(db, "users", selectedId), snap => { member = snap.exists() ? snap.data() : false; renderMember(); });
+  listen(doc(db, "trustProfiles", selectedId), snap => { trust = snap.data() || {}; renderMember(); }, () => {});
+  listen(doc(db, "userEndorsements", selectedId), snap => { endorseCount = Number(snap.data()?.count || 0); renderMember(); }, () => {});
+  listen(doc(db, "userEndorsements", selectedId, "endorsers", uid), snap => { endorsedByMe = snap.exists(); renderMember(); }, () => {});
+}
+
+function renderMemberDetail(detail, id, data, trust, endorseCount, endorsedByMe, rel) {
+  if (!data) { detail.innerHTML = `<div class="detail-empty"><p>This member's profile isn't available.</p></div>`; return; }
+  const me = state.user.uid;
+  const isMe = id === me;
+  const score = Math.trunc(Number(trust.trustScore ?? data.trustScore ?? 50)) || 0;
+  const ratingCount = Math.trunc(Number(trust.ratingCount ?? data.ratingCount ?? 0)) || 0;
+  const ratingAverage = Number(trust.ratingAverage ?? data.ratingAverage ?? 0) || 0;
+  const badge = String(trust.badgeLevel || "new").toLowerCase();
+  const skills = Array.isArray(data.skills) ? data.skills.map(String) : [];
+  const linkedin = normalizeLinkedin(data.linkedinUrl);
+  const org = data.organisationStatus === "approved" ? String(data.organisationName || "") : "";
+  const scoreClass = score >= 80 ? "status-accepted" : score >= 60 ? "status-done" : score >= 40 ? "status-pending" : "status-closed";
+  const safety = score < 40 ? ["notice-danger", "Low trust score. Use extra caution before accepting in-person seva."]
+    : score < 60 ? ["notice-warn", "Moderate trust score. Review profile details carefully before accepting."]
+    : ["", "Always use good judgement before accepting in-person seva."];
+  const friendBtn = isMe ? "" : {
+    friends: `<button class="btn btn-surface btn-small" disabled>Friends</button>`,
+    sent: `<button class="btn btn-surface btn-small" disabled>Request sent</button>`,
+    incoming: `<button class="btn btn-gold btn-small" data-respond="accepted">Accept friend</button><button class="btn btn-line btn-small" data-respond="declined">Decline</button>`
+  }[rel] || `<button class="btn btn-gold btn-small" id="add-friend">Add friend</button>`;
+
+  detail.innerHTML = `
+    <article class="request member">
+      <a class="back" href="#/sangat">${icon("back")} Back</a>
+      <header class="member-head">
+        ${avatarHtml(data, "avatar-lg")}
+        <div>
+          <h2>${escapeHtml(displayName(data))}</h2>
+          <p class="muted">${escapeHtml([pickFirstString(data, ["locationName", "area", "location"]), pickFirstString(data, ["role", "communityRole", "userType"])].filter(Boolean).join(" · "))}</p>
+          <div class="request-head">
+            ${isVerified(data) ? `<span class="pill status-accepted">Verified</span>` : ""}
+            <span class="pill ${scoreClass}">Trust ${score}</span>
+            <span class="pill status-closed">${escapeHtml(BADGE_LABELS[badge] || badge || "New")}</span>
+            <span class="pill status-closed">${ratingCount ? `${ratingAverage.toFixed(1)} rating (${ratingCount})` : "No ratings yet"}</span>
+          </div>
+        </div>
+      </header>
+      ${isMe ? `<p class="notice">This is you. <a href="#/profile">Edit your profile</a>.</p>` : `<div class="row">${friendBtn}
+        <button class="btn btn-surface btn-small" id="endorse">${endorsedByMe ? "Endorsed" : "Endorse"}</button></div>`}
+      <div class="kv-mini four">
+        <div><span>Help received</span><b>${escapeHtml(String(trust.completedRequests ?? data.completedRequests ?? 0))}</b></div>
+        <div><span>Seva given</span><b>${escapeHtml(String(trust.completedHelps ?? data.completedHelps ?? 0))}</b></div>
+        <div><span>Endorsements</span><b>${endorseCount}</b></div>
+        <div><span>Reports</span><b>${escapeHtml(String(trust.reportCount ?? 0))}</b></div>
+      </div>
+      ${data.about ? `<div><h3 class="h-small">About</h3><p class="request-desc">${escapeHtml(data.about)}</p></div>` : ""}
+      ${skills.length ? `<div><h3 class="h-small">Skills</h3><div class="request-head">${skills.map(s => `<span class="tag">${escapeHtml(s)}</span>`).join("")}</div></div>` : ""}
+      ${org || linkedin ? `<div class="kvs">
+        ${org ? `<div class="kv"><span>Gurdwara</span><p>${escapeHtml(org)}</p></div>` : ""}
+        ${linkedin ? `<div class="kv"><span>LinkedIn</span><p><a href="${escapeHtml(linkedin)}" target="_blank" rel="noopener noreferrer">View LinkedIn profile</a></p></div>` : ""}
+      </div>` : ""}
+      <p class="notice ${safety[0]}">${escapeHtml(safety[1])}</p>
+      ${isMe ? "" : `<div class="row"><button class="link-button" id="report-user">Report</button><button class="link-button danger" id="block-user">Block</button></div>`}
+    </article>`;
+
+  detail.querySelector("#add-friend")?.addEventListener("click", e => sendFriendRequest(e.currentTarget, id));
+  detail.querySelectorAll("[data-respond]").forEach(b => b.addEventListener("click", () => respondFriend(id, b.dataset.respond)));
+  detail.querySelector("#endorse")?.addEventListener("click", e => setEndorsement(e.currentTarget, id, !endorsedByMe));
+  detail.querySelector("#report-user")?.addEventListener("click", () => reportUser(id, displayName(data)));
+  detail.querySelector("#block-user")?.addEventListener("click", () => blockUser(id, displayName(data)));
+}
+
+// Mirrors CommunitySocialService.sendFriendRequest.
+async function sendFriendRequest(btn, otherUid) {
+  const uid = state.user.uid;
+  if (otherUid === uid) return;
+  btn.disabled = true; btn.textContent = "Sending…";
+  const ref = doc(db, "friendRequests", friendRequestId(uid, otherUid));
+  try {
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (snap.exists() && ["pending", "accepted"].includes(String(snap.data().status || ""))) return;
+      tx.set(ref, { senderId: uid, receiverId: otherUid, participantIds: [uid, otherUid], status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    });
+    toast("Friend request sent.", "ok");
+  } catch (err) {
+    toast(String(err?.code || "").includes("permission-denied") ? "Couldn't send the request. You both need verified SayVah accounts." : friendlyError(err), "err");
+    btn.disabled = false; btn.textContent = "Add friend";
+  }
+}
+
+// Mirrors CommunitySocialService.respondToFriendRequest.
+async function respondFriend(otherUid, status) {
+  if (!["accepted", "declined"].includes(status)) return;
+  try {
+    await setDoc(doc(db, "friendRequests", friendRequestId(state.user.uid, otherUid)), { status, updatedAt: serverTimestamp() }, { merge: true });
+    toast(status === "accepted" ? "You're now friends." : "Request declined.", "ok");
+  } catch (err) { toast(friendlyError(err), "err"); }
+}
+
+// Mirrors CommunitySocialService.setEndorsement.
+async function setEndorsement(btn, targetUid, endorsed) {
+  const uid = state.user.uid;
+  if (uid === targetUid) return;
+  btn.disabled = true;
+  const ref = doc(db, "userEndorsements", targetUid, "endorsers", uid);
+  const countRef = doc(db, "userEndorsements", targetUid);
+  try {
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      if (endorsed && snap.exists()) return;
+      if (!endorsed && !snap.exists()) return;
+      if (endorsed) {
+        tx.set(ref, { endorserUid: uid, targetUid, createdAt: serverTimestamp() });
+        tx.set(countRef, { targetUid, count: increment(1), updatedAt: serverTimestamp() }, { merge: true });
+      } else {
+        tx.delete(ref);
+        tx.set(countRef, { targetUid, count: increment(-1), updatedAt: serverTimestamp() }, { merge: true });
+      }
+    });
+    toast(endorsed ? "Endorsement added." : "Endorsement removed.", "ok");
+  } catch (err) {
+    toast(String(err?.code || "").includes("permission-denied") ? "Couldn't save that. You both need verified SayVah accounts to endorse." : friendlyError(err), "err");
+    btn.disabled = false;
+  }
+}
+
+function reportUser(targetUid, targetName) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "dialog";
+  dialog.innerHTML = `
+    <form method="dialog">
+      <h2>Report ${escapeHtml(targetName || "this member")}</h2>
+      <p class="muted">Your report goes to the SayVah moderation team. They won't be told who reported them.</p>
+      <label class="field"><span>Reason</span><select name="reason">${REPORT_REASONS.map(r => `<option>${escapeHtml(r)}</option>`).join("")}</select></label>
+      <label class="field"><span>What happened? <small class="muted">(optional)</small></span><textarea name="details" rows="4" maxlength="1000"></textarea></label>
+      <p class="form-msg" role="alert"></p>
+      <div class="row end"><button class="btn btn-line" value="cancel">Cancel</button><button class="btn btn-gold" value="ok" data-send>Send report</button></div>
+    </form>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.querySelector("[data-send]").addEventListener("click", async e => {
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const form = dialog.querySelector("form");
+    const reason = form.reason.value, details = form.details.value.trim();
+    btn.disabled = true; btn.textContent = "Sending…";
+    try {
+      // Mirrors PublicUserProfileScreen._reportUser.
+      await addDoc(collection(db, "user_reports"), {
+        type: "user", reportedUserId: targetUid, reportedUserName: targetName, reportedBy: state.user.uid,
+        reason, details, status: "pending", createdAt: serverTimestamp()
+      });
+      await addDoc(collection(db, "moderation_events"), {
+        type: "user_report", reportedUserId: targetUid, reportedBy: state.user.uid, reason, status: "pending", createdAt: serverTimestamp()
+      });
+      dialog.close();
+      toast("Reported to the moderation team. Thank you.", "ok");
+    } catch (err) {
+      dialog.querySelector(".form-msg").textContent = friendlyError(err);
+      btn.disabled = false; btn.textContent = "Send report";
+    }
+  });
+}
+
+// Mirrors PublicUserProfileScreen._blockUser.
+async function blockUser(targetUid, targetName) {
+  if (!confirm(`Block ${targetName || "this member"}?\n\nThey'll be hidden from you, and the SayVah moderation team will be told.`)) return;
+  const uid = state.user.uid;
+  try {
+    await setDoc(doc(db, "users", uid, "blockedUsers", targetUid), { blockedUserId: targetUid, blockedUserName: targetName, blockedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, "users", uid), { blockedUserIds: arrayUnion(targetUid), updatedAt: serverTimestamp() }, { merge: true });
+    await addDoc(collection(db, "moderation_events"), {
+      type: "user_block", blockedUserId: targetUid, blockedUserName: targetName, blockedBy: uid, status: "pending_review", createdAt: serverTimestamp()
+    });
+    toast(`${targetName || "Member"} blocked.`, "ok");
+    location.hash = "#/sangat";
+  } catch (err) { toast(friendlyError(err), "err"); }
 }
