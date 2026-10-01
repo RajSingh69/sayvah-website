@@ -63,7 +63,7 @@ if (launchForm) {
     launchForm.classList.add("is-submitting");
     if (launchSubmit) {
       launchSubmit.disabled = true;
-      launchSubmit.textContent = "Joining...";
+      launchSubmit.textContent = "Sending...";
     }
     setLaunchStatus("Adding you to the launch list...", "");
 
@@ -89,7 +89,7 @@ if (launchForm) {
       launchForm.classList.remove("is-submitting");
       if (launchSubmit) {
         launchSubmit.disabled = false;
-        launchSubmit.textContent = "Join the Launch";
+        launchSubmit.textContent = "Send my details";
       }
     }
   });
